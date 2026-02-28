@@ -40,6 +40,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
     recoverCrossDeptQueueAfterMissingCallback,
     subtaskDelegationCallbacks,
     startReviewConsensusMeeting,
+    processSubtaskDelegations,
   } = deps;
 
   function reconcileDelegatedSubtasksAfterRun(taskId: string, exitCode: number): void {
@@ -213,6 +214,32 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
       .prepare("SELECT COUNT(*) as cnt FROM subtasks WHERE task_id = ? AND status != 'done'")
       .get(taskId) as { cnt: number };
     if (remainingSubtasks.cnt > 0) {
+      // Check if only VIDEO_FINAL_RENDER subtask(s) remain — trigger delegation instead of blocking forever
+      const pendingRender = db
+        .prepare(
+          "SELECT * FROM subtasks WHERE task_id = ? AND status != 'done' AND title LIKE '%[VIDEO_FINAL_RENDER]%'",
+        )
+        .all(taskId) as Array<{ id: string; status: string; delegated_task_id: string | null }>;
+      const nonRenderRemaining = remainingSubtasks.cnt - pendingRender.length;
+
+      if (nonRenderRemaining === 0 && pendingRender.length > 0) {
+        const undelegated = pendingRender.filter((s) => !s.delegated_task_id);
+        if (undelegated.length > 0) {
+          // Unblock and delegate render subtasks
+          for (const sub of undelegated) {
+            if (sub.status === "blocked") {
+              db.prepare("UPDATE subtasks SET status = 'pending', blocked_reason = NULL WHERE id = ?").run(sub.id);
+              broadcast("subtask_update", db.prepare("SELECT * FROM subtasks WHERE id = ?").get(sub.id));
+            }
+          }
+          appendTaskLog(taskId, "system", "Review hold: only VIDEO_FINAL_RENDER remains — unblocking and triggering delegation.");
+          processSubtaskDelegations(taskId, { includeRender: true });
+        } else {
+          appendTaskLog(taskId, "system", `Review hold: VIDEO_FINAL_RENDER already delegated, waiting for completion.`);
+        }
+        return;
+      }
+
       notifyCeo(
         pickL(
           l(

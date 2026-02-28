@@ -340,7 +340,7 @@ export function handleProjectReviewDecisionReply(input: ProjectReviewReplyInput)
 
     if (blockedTasks.length > 0) {
       for (const blocked of blockedTasks) {
-        if (blocked.reason !== "video_artifact_missing") continue;
+        if (blocked.reason !== "video_artifact_missing" && blocked.reason !== "unfinished_subtasks") continue;
         const taskRow = reviewTasks.find((task) => task.id === blocked.id);
         if (!taskRow || taskRow.workflow_pack_key !== "video_preprod") continue;
         const existingActiveRenderSubtask = db
@@ -371,7 +371,7 @@ export function handleProjectReviewDecisionReply(input: ProjectReviewReplyInput)
         appendTaskLog(taskRow.id, "system", "Decision inbox: auto-created final render subtask (target=dev)");
         const insertedSubtask = db.prepare("SELECT * FROM subtasks WHERE id = ?").get(subtaskId);
         broadcast("subtask_update", insertedSubtask);
-        processSubtaskDelegations?.(taskRow.id);
+        processSubtaskDelegations?.(taskRow.id, { includeRender: true });
       }
 
       const blockedSummary = `팀장 회의 시작 보류 (${blockedTasks.length}건): ${blockedTasks.map((task) => task.title).join(", ")}`;

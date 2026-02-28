@@ -135,12 +135,12 @@ export function initializeSubtaskSummary({ db, l, pickL }: InitializeSubtaskSumm
   function getSubtaskDeptExecutionPriority(deptId: string | null): number {
     if (!deptId) return 999;
     const explicitOrder: Record<string, number> = {
-      dev: 0,
-      design: 1,
-      qa: 2,
-      operations: 3,
-      devsecops: 4,
-      planning: 5,
+      planning: 0,
+      dev: 1,
+      design: 2,
+      qa: 3,
+      operations: 4,
+      devsecops: 5,
     };
     if (deptId in explicitOrder) return explicitOrder[deptId];
     const row = db.prepare("SELECT sort_order FROM departments WHERE id = ?").get(deptId) as

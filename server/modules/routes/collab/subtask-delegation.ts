@@ -219,6 +219,7 @@ export function initializeSubtaskDelegation(deps: SubtaskDelegationDeps) {
           id: string;
           title: string;
           description: string | null;
+          status: string;
           project_id: string | null;
           project_path: string | null;
           department_id: string | null;
@@ -226,6 +227,23 @@ export function initializeSubtaskDelegation(deps: SubtaskDelegationDeps) {
       | undefined;
     if (!parentTask) return;
     const lang = resolveLang(parentTask.description ?? parentTask.title);
+
+    // Origin team first: defer foreign delegation until origin team reaches review (work complete)
+    if (!["review", "done"].includes(parentTask.status)) {
+      const ownDeptPending = db
+        .prepare(
+          "SELECT COUNT(*) as cnt FROM subtasks WHERE task_id = ? AND (target_department_id IS NULL OR target_department_id = ?) AND status NOT IN ('done', 'cancelled')",
+        )
+        .get(taskId, parentTask.department_id ?? "") as { cnt: number };
+      if (ownDeptPending.cnt > 0) {
+        appendTaskLog(
+          taskId,
+          "system",
+          `Subtask delegation deferred: origin team has ${ownDeptPending.cnt} unfinished subtask(s) (task status=${parentTask.status}). Foreign delegation will start after origin team reaches review.`,
+        );
+        return;
+      }
+    }
     const queues = orderSubtaskQueuesByDepartment(groupSubtasksByTargetDepartment(eligible));
     const deptCount = queues.length;
     subtaskDelegationDispatchInFlight.add(taskId);
@@ -270,14 +288,14 @@ export function initializeSubtaskDelegation(deps: SubtaskDelegationDeps) {
 
   function maybeNotifyAllSubtasksComplete(parentTaskId: string): void {
     const remaining = db
-      .prepare("SELECT COUNT(*) as cnt FROM subtasks WHERE task_id = ? AND status != 'done'")
+      .prepare("SELECT COUNT(*) as cnt FROM subtasks WHERE task_id = ? AND status NOT IN ('done', 'cancelled')")
       .get(parentTaskId) as { cnt: number };
 
     // Check if VIDEO_FINAL_RENDER is the only incomplete subtask(s)
     if (remaining.cnt > 0) {
       const pendingRender = db
         .prepare(
-          "SELECT * FROM subtasks WHERE task_id = ? AND status != 'done' AND title LIKE '%[VIDEO_FINAL_RENDER]%'",
+          "SELECT * FROM subtasks WHERE task_id = ? AND status NOT IN ('done', 'cancelled') AND title LIKE '%[VIDEO_FINAL_RENDER]%'",
         )
         .all(parentTaskId) as unknown as SubtaskRow[];
 
@@ -287,10 +305,17 @@ export function initializeSubtaskDelegation(deps: SubtaskDelegationDeps) {
         // All non-render subtasks complete — trigger VIDEO_FINAL_RENDER delegation
         const undelegated = pendingRender.filter((s) => !s.delegated_task_id);
         if (undelegated.length > 0) {
+          // Unblock render subtasks so delegation can proceed
+          for (const sub of undelegated) {
+            if (sub.status === "blocked") {
+              db.prepare("UPDATE subtasks SET status = 'pending', blocked_reason = NULL WHERE id = ?").run(sub.id);
+              broadcast("subtask_update", db.prepare("SELECT * FROM subtasks WHERE id = ?").get(sub.id));
+            }
+          }
           appendTaskLog(
             parentTaskId,
             "system",
-            "All non-render subtasks completed. Triggering VIDEO_FINAL_RENDER delegation.",
+            "All non-render subtasks completed. Unblocked and triggering VIDEO_FINAL_RENDER delegation.",
           );
           processSubtaskDelegations(parentTaskId, { includeRender: true });
           return; // Not all done yet — don't call finishReview

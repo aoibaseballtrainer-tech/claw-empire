@@ -278,7 +278,7 @@ export interface ProjectReviewReplyDeps {
   recordProjectReviewDecisionEvent: (input: ProjectReviewDecisionEventInput) => void;
   getProjectReviewTaskChoices: (projectId: string) => ProjectReviewTaskChoice[];
   openSupplementRound: OpenSupplementRoundFn;
-  processSubtaskDelegations?: (taskId: string) => void;
+  processSubtaskDelegations?: (taskId: string, opts?: { includeRender?: boolean }) => void;
   PROJECT_REVIEW_TASK_SELECTED_LOG_PREFIX: string;
 }
 

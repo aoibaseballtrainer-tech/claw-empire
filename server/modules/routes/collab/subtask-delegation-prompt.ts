@@ -55,8 +55,8 @@ export function createSubtaskDelegationPromptBuilder(deps: PromptDeps) {
       .join("\n");
 
     const allSubtasks = db
-      .prepare("SELECT id, title, status, target_department_id FROM subtasks WHERE task_id = ? ORDER BY created_at")
-      .all(parentTask.id) as Array<{ id: string; title: string; status: string; target_department_id: string | null }>;
+      .prepare("SELECT id, title, status, target_department_id, delegated_task_id FROM subtasks WHERE task_id = ? ORDER BY created_at")
+      .all(parentTask.id) as Array<{ id: string; title: string; status: string; target_department_id: string | null; delegated_task_id: string | null }>;
 
     const statusIcon: Record<string, string> = {
       done: "✅",
@@ -65,21 +65,104 @@ export function createSubtaskDelegationPromptBuilder(deps: PromptDeps) {
       blocked: "🔒",
     };
 
+    const parentDept = db.prepare("SELECT department_id FROM tasks WHERE id = ?").get(parentTask.id) as
+      | { department_id: string | null }
+      | undefined;
+
     const subtaskLines = allSubtasks
       .map((st) => {
         const icon = statusIcon[st.status] || "⏳";
-        const parentDept = db.prepare("SELECT department_id FROM tasks WHERE id = ?").get(parentTask.id) as
-          | { department_id: string | null }
-          | undefined;
         const dept = st.target_department_id
           ? getDeptName(st.target_department_id)
           : getDeptName(parentDept?.department_id ?? "");
         const marker = assignedIds.has(st.id)
-          ? pickL(l([" ← 당신의 담당"], [" <- assigned to you"], [" ← あなたの担当"], [" <- 你的负责项"]), lang)
+          ? pickL(l([" ← 당신의 담당"], [" <- assigned to you"], [" ← あなたの担당"], [" <- 你的负责项"]), lang)
           : "";
         return `${icon} ${st.title} (${dept} - ${st.status})${marker}`;
       })
       .join("\n");
+
+    // Collect completed sibling subtask artifacts so downstream teams can reference prior work
+    const completedSiblings = allSubtasks.filter(
+      (st) => st.status === "done" && !assignedIds.has(st.id),
+    );
+    let completedArtifactsBlock = "";
+    if (completedSiblings.length > 0) {
+      const artifactSections: string[] = [];
+      for (const sibling of completedSiblings) {
+        const deptName = sibling.target_department_id
+          ? getDeptName(sibling.target_department_id)
+          : getDeptName(parentDept?.department_id ?? "");
+
+        if (sibling.delegated_task_id) {
+          // Delegated subtask — collect logs from delegated task
+          const recentLogs = db
+            .prepare(
+              "SELECT message FROM task_logs WHERE task_id = ? AND kind = 'system' ORDER BY created_at DESC LIMIT 10",
+            )
+            .all(sibling.delegated_task_id) as Array<{ message: string }>;
+          const logSummary = recentLogs
+            .map((row) => row.message)
+            .filter((m) => m && !m.startsWith("RUN ") && !m.startsWith("Status →"))
+            .slice(0, 5)
+            .reverse()
+            .join("\n  ");
+          const delegatedTask = db
+            .prepare("SELECT title, description, project_path FROM tasks WHERE id = ?")
+            .get(sibling.delegated_task_id) as { title: string; description: string | null; project_path: string | null } | undefined;
+          const desc = delegatedTask?.description
+            ? delegatedTask.description.split("\n").slice(0, 15).join("\n  ")
+            : "";
+          artifactSections.push(
+            `[${deptName}] ${sibling.title} (DONE)` +
+            (desc ? `\n  ${desc}` : "") +
+            (logSummary ? `\n  ---\n  ${logSummary}` : ""),
+          );
+        } else {
+          // Own-department subtask — completed by parent team directly (planning/documentation)
+          const siblingRow = db
+            .prepare("SELECT description FROM subtasks WHERE id = ?")
+            .get(sibling.id) as { description: string | null } | undefined;
+          const desc = siblingRow?.description
+            ? siblingRow.description.split("\n").slice(0, 10).join("\n  ")
+            : "";
+          artifactSections.push(
+            `[${deptName}] ${sibling.title} (DONE — completed by origin team)` +
+            (desc ? `\n  ${desc}` : ""),
+          );
+        }
+      }
+
+      // Also include parent task's recent meaningful logs as origin team context
+      const parentLogs = db
+        .prepare(
+          "SELECT message FROM task_logs WHERE task_id = ? AND kind = 'system' ORDER BY created_at DESC LIMIT 15",
+        )
+        .all(parentTask.id) as Array<{ message: string }>;
+      const parentLogSummary = parentLogs
+        .map((row) => row.message)
+        .filter((m) => m && !m.startsWith("RUN ") && !m.startsWith("Status →") && !m.startsWith("Subtask delegation"))
+        .slice(0, 5)
+        .reverse()
+        .join("\n  ");
+      if (parentLogSummary) {
+        const originDeptName = getDeptName(parentDept?.department_id ?? "");
+        artifactSections.unshift(
+          `[${originDeptName}] ${parentTask.title} (origin task summary)\n  ${parentLogSummary}`,
+        );
+      }
+
+      const completedLabel = pickL(
+        l(
+          ["[모체 팀 및 이전 팀 완료 산출물 — 반드시 참고하여 작업하세요]"],
+          ["[Completed artifacts from origin & prior teams — use these as reference for your work]"],
+          ["[元チーム及び先行チーム完了成果物 — 必ず参照して作業してください]"],
+          ["[主体团队及前序团队已完成产出物 — 请务必参考进行工作]"],
+        ),
+        lang,
+      );
+      completedArtifactsBlock = `${completedLabel}\n${artifactSections.join("\n\n")}`;
+    }
 
     const roleLabel =
       { team_leader: "Team Leader", senior: "Senior", junior: "Junior", intern: "Intern" }[execAgent.role] ||
@@ -145,6 +228,7 @@ export function createSubtaskDelegationPromptBuilder(deps: PromptDeps) {
         ``,
         `[${allSubtasksLabel}]`,
         subtaskLines,
+        completedArtifactsBlock ? `\n${completedArtifactsBlock}` : "",
         ``,
         deptOwnedLabel,
         `${checklistLabel}:`,
