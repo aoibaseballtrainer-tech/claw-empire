@@ -82,9 +82,9 @@ describe("office pack display helpers", () => {
     expect(mergedAgents).toHaveLength(1);
   });
 
-  it("DB 부서를 우선 사용하고 pack 부서는 fallback 으로만 사용한다", () => {
+  it("팩 부서명을 우선 사용하고 DB 메타데이터는 fallback 으로 병합한다", () => {
     const globalDepartments: Department[] = [
-      makeDepartment({ id: "planning", name: "Planning", name_ko: "기획팀", icon: "🧠" }),
+      makeDepartment({ id: "planning", name: "Planning", name_ko: "기획팀", icon: "🧠", created_at: 77 }),
       makeDepartment({ id: "operations", name: "Operations", name_ko: "운영팀", icon: "📦" }),
     ];
     const packDepartments: Department[] = [
@@ -98,8 +98,9 @@ describe("office pack display helpers", () => {
     });
 
     expect(output[0]?.id).toBe("planning");
-    expect(output[0]?.name_ko).toBe("기획팀");
-    expect(output[0]?.icon).toBe("🧠");
+    expect(output[0]?.name_ko).toBe("편집기획실");
+    expect(output[0]?.icon).toBe("📚");
+    expect(output[0]?.created_at).toBe(1);
     expect(output.some((dept) => dept.id === "operations")).toBe(true);
   });
 

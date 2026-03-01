@@ -1,6 +1,7 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Lang } from "../../../../types/lang.ts";
+import { getDepartmentPromptForPack } from "../../../workflow/packs/department-scope.ts";
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
 import { resolveConstrainedAgentScopeForTask } from "../../core/tasks/execution-run-auto-assign.ts";
 import type { AgentRow } from "./types.ts";
@@ -507,6 +508,7 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
               title: string;
               description: string | null;
               project_path: string | null;
+              workflow_pack_key: string | null;
             }
           | undefined;
         if (crossTaskData) {
@@ -520,11 +522,11 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
           };
           const roleLabel = roleLabels[execAgent.role] ?? execAgent.role;
           const deptConstraint = getDeptRoleConstraint(crossDeptId, crossDeptName);
-          const deptPromptRaw = (
-            db.prepare("SELECT prompt FROM departments WHERE id = ?").get(crossDeptId) as
-              | { prompt?: string | null }
-              | undefined
-          )?.prompt;
+          const deptPromptRaw = getDepartmentPromptForPack(
+            db as any,
+            crossTaskData.workflow_pack_key,
+            crossDeptId,
+          );
           const deptPrompt = typeof deptPromptRaw === "string" ? deptPromptRaw.trim() : "";
           const deptPromptBlock = deptPrompt ? `[Department Shared Prompt]\n${deptPrompt}` : "";
           const crossConversationCtx = getRecentConversationContext(execAgent.id);

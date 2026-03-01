@@ -15,9 +15,11 @@ function mergePackAgent(globalAgent: Agent | undefined, packAgent: Agent): Agent
 }
 
 function mergePackDepartment(globalDepartment: Department | undefined, packDepartment: Department): Department {
-  // DB row is the source of truth after hydration.
-  if (globalDepartment) return globalDepartment;
-  // Fallback for edge cases before hydration settles.
+  // Department labels/icons are pack-specific; prefer pack profile values.
+  // Keep any extra DB-computed fields (if present) as fallback metadata.
+  if (globalDepartment) {
+    return { ...globalDepartment, ...packDepartment };
+  }
   return packDepartment;
 }
 

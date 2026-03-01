@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Department } from "../../types";
+import type { Department, WorkflowPackKey } from "../../types";
 import { useI18n } from "../../i18n";
 import * as api from "../../api";
 import { DEPT_BLANK, DEPT_COLORS } from "./constants";
@@ -15,6 +15,7 @@ export default function DepartmentFormModal({
   onClose,
   onSaveDepartment,
   onDeleteDepartment,
+  workflowPackKey,
 }: {
   locale: string;
   tr: Translator;
@@ -38,6 +39,7 @@ export default function DepartmentFormModal({
     };
   }) => Promise<void>;
   onDeleteDepartment?: (departmentId: string) => Promise<void>;
+  workflowPackKey?: WorkflowPackKey;
 }) {
   const { t } = useI18n();
   const isEdit = !!department;
@@ -107,6 +109,7 @@ export default function DepartmentFormModal({
             color: payload.color,
             description: payload.description,
             prompt: payload.prompt,
+            workflow_pack_key: workflowPackKey,
           });
         }
       } else {
@@ -140,6 +143,7 @@ export default function DepartmentFormModal({
             color: payload.color,
             description: payload.description ?? undefined,
             prompt: payload.prompt ?? undefined,
+            workflow_pack_key: workflowPackKey,
           });
         }
       }
@@ -168,7 +172,7 @@ export default function DepartmentFormModal({
       if (onDeleteDepartment) {
         await onDeleteDepartment(department!.id);
       } else {
-        await api.deleteDepartment(department!.id);
+        await api.deleteDepartment(department!.id, { workflowPackKey });
       }
       onSave();
       onClose();

@@ -50,11 +50,13 @@ export function resolveVideoArtifactSpecForTask(
     project_id?: string | null;
     project_path?: string | null;
     department_id?: string | null;
+    workflow_pack_key?: string | null;
   },
 ): VideoArtifactSpec {
   const projectId = String(task.project_id ?? "").trim();
   const departmentId = String(task.department_id ?? "").trim();
   const projectPath = String(task.project_path ?? "").trim();
+  const workflowPackKey = String(task.workflow_pack_key ?? "").trim();
 
   let projectNameRow: { name?: string | null } | undefined;
   if (projectId) {
@@ -70,9 +72,25 @@ export function resolveVideoArtifactSpecForTask(
   let departmentNameRow: { name?: string | null; name_ko?: string | null } | undefined;
   if (departmentId) {
     try {
-      departmentNameRow = db.prepare("SELECT name, name_ko FROM departments WHERE id = ?").get(departmentId) as
-        | { name?: string | null; name_ko?: string | null }
-        | undefined;
+      if (workflowPackKey && workflowPackKey !== "development") {
+        departmentNameRow = db
+          .prepare(
+            `
+              SELECT name, name_ko
+              FROM office_pack_departments
+              WHERE workflow_pack_key = ? AND department_id = ?
+              LIMIT 1
+            `,
+          )
+          .get(workflowPackKey, departmentId) as
+          | { name?: string | null; name_ko?: string | null }
+          | undefined;
+      }
+      if (!departmentNameRow) {
+        departmentNameRow = db.prepare("SELECT name, name_ko FROM departments WHERE id = ?").get(departmentId) as
+          | { name?: string | null; name_ko?: string | null }
+          | undefined;
+      }
     } catch {
       departmentNameRow = undefined;
     }

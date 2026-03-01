@@ -1,4 +1,5 @@
 import type { Lang } from "../../../types/lang.ts";
+import { getDepartmentPromptForPack } from "../../workflow/packs/department-scope.ts";
 import type { AgentRow } from "./direct-chat.ts";
 import type { L10n } from "./language-policy.ts";
 import type { SubtaskRow } from "./subtask-summary.ts";
@@ -65,8 +66,8 @@ export function createSubtaskDelegationPromptBuilder(deps: PromptDeps) {
       blocked: "🔒",
     };
 
-    const parentDept = db.prepare("SELECT department_id FROM tasks WHERE id = ?").get(parentTask.id) as
-      | { department_id: string | null }
+    const parentDept = db.prepare("SELECT department_id, workflow_pack_key FROM tasks WHERE id = ?").get(parentTask.id) as
+      | { department_id: string | null; workflow_pack_key: string | null }
       | undefined;
 
     const subtaskLines = allSubtasks
@@ -168,11 +169,11 @@ export function createSubtaskDelegationPromptBuilder(deps: PromptDeps) {
       { team_leader: "Team Leader", senior: "Senior", junior: "Junior", intern: "Intern" }[execAgent.role] ||
       execAgent.role;
     const deptConstraint = getDeptRoleConstraint(targetDeptId, targetDeptName);
-    const deptPromptRaw = (
-      db.prepare("SELECT prompt FROM departments WHERE id = ?").get(targetDeptId) as
-        | { prompt?: string | null }
-        | undefined
-    )?.prompt;
+    const deptPromptRaw = getDepartmentPromptForPack(
+      db as any,
+      parentDept?.workflow_pack_key ?? "development",
+      targetDeptId,
+    );
     const deptPrompt = typeof deptPromptRaw === "string" ? deptPromptRaw.trim() : "";
     const deptPromptBlock = deptPrompt ? `[Department Shared Prompt]\n${deptPrompt}` : "";
     const conversationCtx = getRecentConversationContext(execAgent.id);

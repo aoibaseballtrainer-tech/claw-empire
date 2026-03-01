@@ -30,6 +30,7 @@ import {
   getOfficePackRoomThemes,
   listOfficePackOptions,
   normalizeOfficeWorkflowPack,
+  resolveOfficePackSeedProvider,
 } from "./office-workflow-pack";
 import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./office-pack-display";
 import {
@@ -239,7 +240,6 @@ export default function AppMainLayout({
       targetCount: 8,
       locale: uiLanguage,
     });
-    const fallbackProvider = agents.find((agent) => !!agent.cli_provider)?.cli_provider ?? "codex";
     const now = Date.now();
     return drafts.map((draft, index) => ({
       id: `${officePackKey}-seed-${index + 1}`,
@@ -250,7 +250,13 @@ export default function AppMainLayout({
       department_id: draft.department_id,
       role: draft.role,
       acts_as_planning_leader: draft.acts_as_planning_leader,
-      cli_provider: fallbackProvider,
+      cli_provider: resolveOfficePackSeedProvider({
+        packKey: officePackKey,
+        departmentId: draft.department_id,
+        role: draft.role,
+        seedIndex: index + 1,
+        seedOrderInDepartment: draft.seed_order_in_department,
+      }),
       avatar_emoji: draft.avatar_emoji,
       sprite_number: draft.sprite_number,
       personality: draft.personality,
@@ -260,7 +266,7 @@ export default function AppMainLayout({
       stats_xp: 0,
       created_at: now,
     }));
-  }, [activePackProfile?.agents, agents, generatedOfficePresentation.departments, officePackKey, uiLanguage]);
+  }, [activePackProfile?.agents, generatedOfficePresentation.departments, officePackKey, uiLanguage]);
 
   const packProfileDepartments =
     officePackKey === "development" ? null : activePackProfile?.departments ?? generatedOfficePresentation.departments;

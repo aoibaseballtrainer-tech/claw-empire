@@ -6,6 +6,7 @@ import {
 } from "../../../workflow/packs/definitions.ts";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
+let cachedHasAgentWorkflowPackColumn: boolean | null = null;
 
 type ProjectAssignmentModeRow = {
   assignment_mode?: string | null;
@@ -331,10 +332,22 @@ function isOAuthBackedProviderReady(agent: AutoAssignableAgent, activeOAuthByPro
   return true;
 }
 
+function hasAgentWorkflowPackColumn(db: DbLike): boolean {
+  if (cachedHasAgentWorkflowPackColumn !== null) return cachedHasAgentWorkflowPackColumn;
+  try {
+    const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
+    cachedHasAgentWorkflowPackColumn = cols.some((col) => normalizeText(col.name) === "workflow_pack_key");
+  } catch {
+    cachedHasAgentWorkflowPackColumn = false;
+  }
+  return cachedHasAgentWorkflowPackColumn;
+}
+
 function selectCandidate(
   db: DbLike,
   preferredDeptIds: string[],
   constrainedAgentIds: string[] | null,
+  packKey: WorkflowPackKey,
 ): AutoAssignableAgent | null {
   if (Array.isArray(constrainedAgentIds) && constrainedAgentIds.length === 0) {
     return null;
@@ -355,6 +368,11 @@ function selectCandidate(
   if (Array.isArray(constrainedAgentIds)) {
     conditions.push(`id IN (${constrainedAgentIds.map(() => "?").join(", ")})`);
     params.push(...constrainedAgentIds);
+  }
+
+  if (hasAgentWorkflowPackColumn(db)) {
+    conditions.push("COALESCE(workflow_pack_key, 'development') = ?");
+    params.push(packKey);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -416,12 +434,12 @@ export function selectAutoAssignableAgentForTask(
   const preferredDeptIds = buildPreferredDepartmentOrder(packKey, task.department_id);
   const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db, task);
 
-  const preferredCandidate = selectCandidate(db, preferredDeptIds, constrainedAgentIds);
+  const preferredCandidate = selectCandidate(db, preferredDeptIds, constrainedAgentIds, packKey);
   if (preferredCandidate) {
     return { packKey, agent: preferredCandidate };
   }
 
-  const fallbackCandidate = selectCandidate(db, [], constrainedAgentIds);
+  const fallbackCandidate = selectCandidate(db, [], constrainedAgentIds, packKey);
   if (!fallbackCandidate) return null;
 
   return { packKey, agent: fallbackCandidate };

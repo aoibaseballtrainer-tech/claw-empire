@@ -179,15 +179,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
       });
     }
 
-    const agent = db
-      .prepare(
-        `
-    SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.prompt AS department_prompt
-    FROM agents a LEFT JOIN departments d ON a.department_id = d.id
-    WHERE a.id = ?
-  `,
-      )
-      .get(agentId) as
+    let agent:
       | {
           id: string;
           name: string;
@@ -206,6 +198,71 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
           department_prompt: string | null;
         }
       | undefined;
+    try {
+      agent = db
+        .prepare(
+          `
+      SELECT
+        a.*,
+        COALESCE(opd.name, d.name) AS department_name,
+        COALESCE(opd.name_ko, d.name_ko) AS department_name_ko,
+        COALESCE(opd.prompt, d.prompt) AS department_prompt
+      FROM agents a
+      LEFT JOIN office_pack_departments opd
+        ON opd.workflow_pack_key = COALESCE(?, 'development')
+       AND opd.department_id = a.department_id
+      LEFT JOIN departments d ON a.department_id = d.id
+      WHERE a.id = ?
+    `,
+        )
+        .get(task.workflow_pack_key, agentId) as
+        | {
+            id: string;
+            name: string;
+            name_ko: string | null;
+            role: string;
+            cli_provider: string | null;
+            oauth_account_id: string | null;
+            api_provider_id: string | null;
+            api_model: string | null;
+            cli_model: string | null;
+            cli_reasoning_level: string | null;
+            personality: string | null;
+            department_id: string | null;
+            department_name: string | null;
+            department_name_ko: string | null;
+            department_prompt: string | null;
+          }
+        | undefined;
+    } catch {
+      agent = db
+        .prepare(
+          `
+      SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.prompt AS department_prompt
+      FROM agents a LEFT JOIN departments d ON a.department_id = d.id
+      WHERE a.id = ?
+    `,
+        )
+        .get(agentId) as
+        | {
+            id: string;
+            name: string;
+            name_ko: string | null;
+            role: string;
+            cli_provider: string | null;
+            oauth_account_id: string | null;
+            api_provider_id: string | null;
+            api_model: string | null;
+            cli_model: string | null;
+            cli_reasoning_level: string | null;
+            personality: string | null;
+            department_id: string | null;
+            department_name: string | null;
+            department_name_ko: string | null;
+            department_prompt: string | null;
+          }
+        | undefined;
+    }
     if (!agent) return res.status(400).json({ error: "agent_not_found" });
 
     const agentBusy = activeProcesses.has(
@@ -369,6 +426,7 @@ Whenever you complete a subtask, report it in this format:
             project_id: task.project_id,
             project_path: task.project_path,
             department_id: task.department_id,
+            workflow_pack_key: task.workflow_pack_key,
           })
         : null;
     const workflowPackGuidance = buildWorkflowPackExecutionGuidance(task.workflow_pack_key, taskLang, {

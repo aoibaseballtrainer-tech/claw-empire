@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
+import { getDepartmentPromptForPack } from "../packs/department-scope.ts";
 import {
   buildInterruptPromptBlock,
   consumeInterruptPrompts,
@@ -94,6 +95,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
           project_id: string | null;
           project_path: string | null;
           base_branch: string | null;
+          workflow_pack_key: string | null;
         }
       | undefined;
     if (!taskData) return;
@@ -115,13 +117,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     };
     const roleLabel = roleLabels[execAgent.role] ?? execAgent.role;
     const deptConstraint = deptId ? getDeptRoleConstraint(deptId, deptName) : "";
-    const deptPromptRaw = deptId
-      ? (
-          db.prepare("SELECT prompt FROM departments WHERE id = ?").get(deptId) as
-            | { prompt?: string | null }
-            | undefined
-        )?.prompt
-      : null;
+    const deptPromptRaw = deptId ? getDepartmentPromptForPack(db as any, taskData.workflow_pack_key, deptId) : null;
     const deptPrompt = typeof deptPromptRaw === "string" ? deptPromptRaw.trim() : "";
     const deptPromptBlock = deptPrompt ? `[Department Shared Prompt]\n${deptPrompt}` : "";
     const conversationCtx = getRecentConversationContext(execAgent.id);

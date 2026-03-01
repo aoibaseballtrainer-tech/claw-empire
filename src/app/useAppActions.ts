@@ -442,7 +442,7 @@ export function useAppActions({
     const activePack = normalizeOfficeWorkflowPack(settings.officeWorkflowPack ?? "development");
     const includeSeedAgents = activePack !== "development";
     api.getAgents({ includeSeed: includeSeedAgents }).then(setAgents).catch(console.error);
-    api.getDepartments().then(setDepartments).catch(console.error);
+    api.getDepartments({ workflowPackKey: activePack }).then(setDepartments).catch(console.error);
     api.getTasks().then(setTasks).catch(console.error);
   }, [setAgents, setDepartments, setTasks, settings.officeWorkflowPack]);
 

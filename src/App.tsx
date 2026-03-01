@@ -47,6 +47,7 @@ import {
   buildOfficePackStarterAgents,
   getOfficePackMeta,
   normalizeOfficeWorkflowPack,
+  resolveOfficePackSeedProvider,
 } from "./app/office-workflow-pack";
 
 export type { OAuthCallbackResult } from "./app/types";
@@ -166,7 +167,6 @@ export default function App() {
     });
     if (starterDrafts.length <= 0) return null;
 
-    const fallbackProvider = agents.find((agent) => !!agent.cli_provider)?.cli_provider ?? sourceSettings.defaultProvider;
     const now = Date.now();
     const seededAgents: Agent[] = starterDrafts.map((draft, index) => ({
       id: `${packKey}-seed-${index + 1}`,
@@ -177,7 +177,13 @@ export default function App() {
       department_id: draft.department_id,
       role: draft.role,
       acts_as_planning_leader: draft.acts_as_planning_leader,
-      cli_provider: fallbackProvider,
+      cli_provider: resolveOfficePackSeedProvider({
+        packKey,
+        departmentId: draft.department_id,
+        role: draft.role,
+        seedIndex: index + 1,
+        seedOrderInDepartment: draft.seed_order_in_department,
+      }),
       avatar_emoji: draft.avatar_emoji,
       sprite_number: draft.sprite_number,
       personality: draft.personality,
@@ -226,7 +232,7 @@ export default function App() {
       .saveSettingsPatch(patchPayload)
       .then(async () => {
         const [nextDepartments, nextAgents, nextSettingsRaw] = await Promise.all([
-          api.getDepartments(),
+          api.getDepartments({ workflowPackKey: packKey }),
           api.getAgents({ includeSeed: packKey !== "development" }),
           api.getSettings(),
         ]);

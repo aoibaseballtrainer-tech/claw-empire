@@ -8,6 +8,7 @@ import {
   type WorkflowPackKey,
 } from "../../../workflow/packs/definitions.ts";
 import { resolveConstrainedAgentScopeForTask } from "../tasks/execution-run-auto-assign.ts";
+import { getDepartmentForPack, parseWorkflowPackKeyInput } from "../../../workflow/packs/department-scope.ts";
 
 export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   const {
@@ -22,6 +23,15 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     meetingTaskIdByAgent,
     meetingReviewDecisionByAgent,
   } = ctx;
+  const hasAgentWorkflowPackColumn = (() => {
+    try {
+      const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
+      return cols.some((col) => String(col.name ?? "").trim() === "workflow_pack_key");
+    } catch {
+      return false;
+    }
+  })();
+  const agentPackExpr = hasAgentWorkflowPackColumn ? "COALESCE(a.workflow_pack_key, 'development')" : "'development'";
 
   function parseIncludeSeedParam(input: unknown): boolean {
     if (Array.isArray(input)) input = input[0];
@@ -34,16 +44,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   }
 
   function parseWorkflowPackKey(value: unknown): WorkflowPackKey | null {
-    const raw = normalizeText(value);
-    if (!raw) return null;
-    let candidate = raw;
-    try {
-      const parsed = JSON.parse(raw);
-      if (typeof parsed === "string") candidate = parsed.trim();
-    } catch {
-      // keep raw text
-    }
-    return isWorkflowPackKey(candidate) ? candidate : null;
+    return parseWorkflowPackKeyInput(value);
   }
 
   function readActiveOfficeWorkflowPackKey(): WorkflowPackKey {
@@ -178,17 +179,39 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   app.get("/api/agents", (req, res) => {
     const includeSeed = parseIncludeSeedParam(req.query?.include_seed);
     const seedFilterClause = includeSeed ? "" : "WHERE a.id NOT LIKE '%-seed-%'";
-    const agents = db
-      .prepare(
-        `
-    SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.color AS department_color
-    FROM agents a
-    LEFT JOIN departments d ON a.department_id = d.id
-    ${seedFilterClause}
-    ORDER BY a.department_id, a.role, a.name
-  `,
-      )
-      .all();
+    let agents: unknown[];
+    try {
+      agents = db
+        .prepare(
+          `
+      SELECT
+        a.*,
+        COALESCE(opd.name, d.name) AS department_name,
+        COALESCE(opd.name_ko, d.name_ko) AS department_name_ko,
+        COALESCE(opd.color, d.color) AS department_color
+      FROM agents a
+      LEFT JOIN office_pack_departments opd
+        ON opd.workflow_pack_key = ${agentPackExpr}
+       AND opd.department_id = a.department_id
+      LEFT JOIN departments d ON a.department_id = d.id
+      ${seedFilterClause}
+      ORDER BY a.department_id, a.role, a.name
+    `,
+        )
+        .all();
+    } catch {
+      agents = db
+        .prepare(
+          `
+      SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.color AS department_color
+      FROM agents a
+      LEFT JOIN departments d ON a.department_id = d.id
+      ${seedFilterClause}
+      ORDER BY a.department_id, a.role, a.name
+    `,
+        )
+        .all();
+    }
     res.json({ agents });
   });
 
@@ -229,16 +252,37 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
 
   app.get("/api/agents/:id", (req, res) => {
     const id = String(req.params.id);
-    const agent = db
-      .prepare(
-        `
-    SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.color AS department_color
-    FROM agents a
-    LEFT JOIN departments d ON a.department_id = d.id
-    WHERE a.id = ?
-  `,
-      )
-      .get(id);
+    let agent: unknown;
+    try {
+      agent = db
+        .prepare(
+          `
+      SELECT
+        a.*,
+        COALESCE(opd.name, d.name) AS department_name,
+        COALESCE(opd.name_ko, d.name_ko) AS department_name_ko,
+        COALESCE(opd.color, d.color) AS department_color
+      FROM agents a
+      LEFT JOIN office_pack_departments opd
+        ON opd.workflow_pack_key = ${agentPackExpr}
+       AND opd.department_id = a.department_id
+      LEFT JOIN departments d ON a.department_id = d.id
+      WHERE a.id = ?
+    `,
+        )
+        .get(id);
+    } catch {
+      agent = db
+        .prepare(
+          `
+      SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.color AS department_color
+      FROM agents a
+      LEFT JOIN departments d ON a.department_id = d.id
+      WHERE a.id = ?
+    `,
+        )
+        .get(id);
+    }
     if (!agent) return res.status(404).json({ error: "not_found" });
 
     const recentTasks = db
@@ -256,15 +300,19 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       const name_ja = typeof body.name_ja === "string" ? body.name_ja.trim() : "";
       const name_zh = typeof body.name_zh === "string" ? body.name_zh.trim() : "";
       if (!name) return res.status(400).json({ error: "name_required" });
+      const requestedPackKey = parseWorkflowPackKey(body.workflow_pack_key);
+      if (body.workflow_pack_key !== undefined && body.workflow_pack_key !== null && !requestedPackKey) {
+        return res.status(400).json({ error: "invalid_workflow_pack_key" });
+      }
+      const activePackKey = readActiveOfficeWorkflowPackKey();
+      const workflowPackKey = requestedPackKey ?? activePackKey;
 
       if (body.department_id !== undefined && body.department_id !== null && typeof body.department_id !== "string") {
         return res.status(400).json({ error: "invalid_department_id" });
       }
       const department_id = typeof body.department_id === "string" ? body.department_id.trim() || null : null;
       if (department_id) {
-        const deptExists = db.prepare("SELECT id FROM departments WHERE id = ?").get(department_id) as
-          | { id: string }
-          | undefined;
+        const deptExists = getDepartmentForPack(db as any, workflowPackKey, department_id);
         if (!deptExists) return res.status(400).json({ error: "department_not_found" });
       }
 
@@ -285,22 +333,42 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
 
       const id = randomUUID();
       try {
-        db.prepare(
-          `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, role, cli_provider, avatar_emoji, sprite_number, personality)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(
-          id,
-          name,
-          name_ko,
-          name_ja,
-          name_zh,
-          department_id,
-          role,
-          cli_provider,
-          avatar_emoji,
-          sprite_number,
-          personality,
-        );
+        if (hasAgentWorkflowPackColumn) {
+          db.prepare(
+            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider, avatar_emoji, sprite_number, personality)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(
+            id,
+            name,
+            name_ko,
+            name_ja,
+            name_zh,
+            department_id,
+            workflowPackKey,
+            role,
+            cli_provider,
+            avatar_emoji,
+            sprite_number,
+            personality,
+          );
+        } else {
+          db.prepare(
+            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, role, cli_provider, avatar_emoji, sprite_number, personality)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(
+            id,
+            name,
+            name_ko,
+            name_ja,
+            name_zh,
+            department_id,
+            role,
+            cli_provider,
+            avatar_emoji,
+            sprite_number,
+            personality,
+          );
+        }
       } catch (err: any) {
         const msg = String(err?.message ?? err);
         if (msg.includes("FOREIGN KEY constraint failed")) {
@@ -309,15 +377,36 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         throw err;
       }
 
-      const created = db
-        .prepare(
-          `
-      SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.color AS department_color
-      FROM agents a LEFT JOIN departments d ON a.department_id = d.id
-      WHERE a.id = ?
-    `,
-        )
-        .get(id);
+      let created: unknown;
+      try {
+        created = db
+          .prepare(
+            `
+        SELECT
+          a.*,
+          COALESCE(opd.name, d.name) AS department_name,
+          COALESCE(opd.name_ko, d.name_ko) AS department_name_ko,
+          COALESCE(opd.color, d.color) AS department_color
+        FROM agents a
+        LEFT JOIN office_pack_departments opd
+          ON opd.workflow_pack_key = ${agentPackExpr}
+         AND opd.department_id = a.department_id
+        LEFT JOIN departments d ON a.department_id = d.id
+        WHERE a.id = ?
+      `,
+          )
+          .get(id);
+      } catch {
+        created = db
+          .prepare(
+            `
+        SELECT a.*, d.name AS department_name, d.name_ko AS department_name_ko, d.color AS department_color
+        FROM agents a LEFT JOIN departments d ON a.department_id = d.id
+        WHERE a.id = ?
+      `,
+          )
+          .get(id);
+      }
       broadcast("agent_created", created);
       res.status(201).json({ ok: true, agent: created });
     } catch (err) {
@@ -449,12 +538,40 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       }
     }
 
+    const requestedPackKey = parseWorkflowPackKey(body.workflow_pack_key);
+    if ("workflow_pack_key" in body) {
+      if (!requestedPackKey) {
+        return res.status(400).json({ error: "invalid_workflow_pack_key" });
+      }
+      body.workflow_pack_key = requestedPackKey;
+    }
+    const existingPackKey = hasAgentWorkflowPackColumn ? parseWorkflowPackKey(existing.workflow_pack_key) : null;
+    const officePackKey = requestedPackKey ?? existingPackKey ?? readActiveOfficeWorkflowPackKey();
+
+    if ("department_id" in body) {
+      if (body.department_id === "" || body.department_id === undefined) {
+        body.department_id = null;
+      } else if (body.department_id !== null && typeof body.department_id !== "string") {
+        return res.status(400).json({ error: "invalid_department_id" });
+      } else if (typeof body.department_id === "string") {
+        const normalizedDepartmentId = body.department_id.trim();
+        if (!normalizedDepartmentId) {
+          body.department_id = null;
+        } else {
+          const deptExists = getDepartmentForPack(db as any, officePackKey, normalizedDepartmentId);
+          if (!deptExists) return res.status(400).json({ error: "department_not_found" });
+          body.department_id = normalizedDepartmentId;
+        }
+      }
+    }
+
     const allowedFields = [
       "name",
       "name_ko",
       "name_ja",
       "name_zh",
       "department_id",
+      ...(hasAgentWorkflowPackColumn ? (["workflow_pack_key"] as const) : []),
       "role",
       "cli_provider",
       "oauth_account_id",
@@ -469,9 +586,6 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       "current_task_id",
       "acts_as_planning_leader",
     ];
-
-    const requestedPackKey = parseWorkflowPackKey(body.workflow_pack_key);
-    const officePackKey = requestedPackKey ?? readActiveOfficeWorkflowPackKey();
     const forcePlanningLeadOverride =
       body.force_planning_leader_override === true ||
       body.force_planning_leader_override === 1 ||

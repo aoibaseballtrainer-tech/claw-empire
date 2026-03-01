@@ -18,6 +18,22 @@ CREATE TABLE IF NOT EXISTS departments (
   created_at INTEGER DEFAULT (unixepoch()*1000)
 );
 
+CREATE TABLE IF NOT EXISTS office_pack_departments (
+  workflow_pack_key TEXT NOT NULL,
+  department_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  name_ko TEXT NOT NULL,
+  name_ja TEXT NOT NULL DEFAULT '',
+  name_zh TEXT NOT NULL DEFAULT '',
+  icon TEXT NOT NULL,
+  color TEXT NOT NULL,
+  description TEXT,
+  prompt TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 99,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  PRIMARY KEY (workflow_pack_key, department_id)
+);
+
 CREATE TABLE IF NOT EXISTS agents (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -25,6 +41,7 @@ CREATE TABLE IF NOT EXISTS agents (
   name_ja TEXT NOT NULL DEFAULT '',
   name_zh TEXT NOT NULL DEFAULT '',
   department_id TEXT REFERENCES departments(id),
+  workflow_pack_key TEXT NOT NULL DEFAULT 'development',
   role TEXT NOT NULL CHECK(role IN ('team_leader','senior','junior','intern')),
   acts_as_planning_leader INTEGER NOT NULL DEFAULT 0 CHECK(acts_as_planning_leader IN (0,1)),
   cli_provider TEXT CHECK(cli_provider IN ('claude','codex','gemini','opencode','copilot','antigravity','api')),

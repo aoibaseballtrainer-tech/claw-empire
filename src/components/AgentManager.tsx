@@ -152,6 +152,7 @@ export default function AgentManager({
             await api.updateAgent(modalAgent.id, {
               ...basePayload,
               department_id: departmentId || null,
+              workflow_pack_key: officePackKey,
             });
             const nextAgents = agents.map((agent) =>
               agent.id === modalAgent.id
@@ -167,6 +168,7 @@ export default function AgentManager({
             const createdAgent = await api.createAgent({
               ...basePayload,
               department_id: departmentId || null,
+              workflow_pack_key: officePackKey,
             });
             await persistIsolatedProfile(departments, [...agents, createdAgent]);
           }
@@ -330,7 +332,7 @@ export default function AgentManager({
       if (isIsolatedPack) {
         if (useDbBackedPack) {
           const orders = nextDepartments.map((department) => ({ id: department.id, sort_order: department.sort_order }));
-          await api.reorderDepartments(orders);
+          await api.reorderDepartments(orders, { workflowPackKey: officePackKey });
           await persistIsolatedProfile(nextDepartments, agents);
           onAgentsChange();
         } else {
@@ -578,6 +580,7 @@ export default function AgentManager({
           tr={tr}
           department={editDept}
           departments={departments}
+          workflowPackKey={isIsolatedPack ? officePackKey : undefined}
           onSave={() => {
             if (!isIsolatedPack || useDbBackedPack) onAgentsChange();
           }}

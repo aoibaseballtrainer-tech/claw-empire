@@ -1,4 +1,4 @@
-import type { Agent, AgentRole, Department, RoomTheme, WorkflowPackKey } from "../types";
+import type { Agent, AgentRole, CliProvider, Department, RoomTheme, WorkflowPackKey } from "../types";
 
 export type UiLanguageLike = "ko" | "en" | "ja" | "zh";
 
@@ -43,12 +43,16 @@ export type OfficePackStarterAgentDraft = {
   name_ja: string;
   name_zh: string;
   department_id: string | null;
+  seed_order_in_department: number;
   role: AgentRole;
   acts_as_planning_leader: number;
   avatar_emoji: string;
   sprite_number: number;
   personality: string | null;
 };
+
+type OfficePackSeedProvider = Extract<CliProvider, "claude" | "codex">;
+const OFFICE_SEED_SPRITE_POOL = Array.from({ length: 13 }, (_, idx) => idx + 1);
 
 const DEV_THEMES: Record<string, RoomTheme> = {
   ceoOffice: { floor1: 0xe5d9b9, floor2: 0xdfd0a8, wall: 0x998243, accent: 0xa77d0c },
@@ -506,13 +510,21 @@ function resolveSeedSpriteNumber(params: {
   deptId: string;
   role: AgentRole;
   order: number;
-}): number {
+}, usedSpriteNumbers: Set<number>): number {
   const seed = `${params.packKey}:${params.deptId}:${params.role}:${params.order}`;
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {
     hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
   }
-  return (hash % 12) + 1;
+  const poolSize = OFFICE_SEED_SPRITE_POOL.length;
+  const start = hash % poolSize;
+  for (let offset = 0; offset < poolSize; offset += 1) {
+    const candidate = OFFICE_SEED_SPRITE_POOL[(start + offset) % poolSize];
+    if (candidate != null && !usedSpriteNumbers.has(candidate)) {
+      return candidate;
+    }
+  }
+  return OFFICE_SEED_SPRITE_POOL[start] ?? 1;
 }
 
 function buildSeedPersonality(params: {
@@ -684,6 +696,24 @@ export function buildOfficePackPresentation(params: {
   };
 }
 
+export function resolveOfficePackSeedProvider(params: {
+  packKey: WorkflowPackKey;
+  departmentId?: string | null;
+  role: AgentRole;
+  seedIndex: number;
+  seedOrderInDepartment?: number;
+}): OfficePackSeedProvider {
+  if (params.packKey === "development") return "claude";
+  const dept = String(params.departmentId ?? "").trim().toLowerCase();
+  if (dept === "planning") {
+    const order = params.seedOrderInDepartment ?? params.seedIndex;
+    return order % 2 === 0 ? "codex" : "claude";
+  }
+  if (dept === "dev" || dept === "design") return "claude";
+  if (dept === "devsecops" || dept === "operations" || dept === "qa") return "codex";
+  return params.seedIndex % 2 === 0 ? "codex" : "claude";
+}
+
 export function buildOfficePackStarterAgents(params: {
   packKey: WorkflowPackKey;
   departments: Department[];
@@ -709,6 +739,7 @@ export function buildOfficePackStarterAgents(params: {
   const desiredCount = Math.max(baseDeptOrder.length + 2, params.targetCount ?? Math.min(10, baseDeptOrder.length * 2));
 
   const perDeptCounter = new Map<string, number>();
+  const usedSpriteNumbers = new Set<number>();
   const result: OfficePackStarterAgentDraft[] = [];
 
   const resolveDeptPrefix = (deptId: string): Localized => {
@@ -746,18 +777,24 @@ export function buildOfficePackStarterAgents(params: {
       order: nextOrder,
       fallbackPrefix: prefix,
     });
-    result.push({
-      ...localizedNames,
-      department_id: deptId,
-      role,
-      acts_as_planning_leader: role === "team_leader" && planningLeadDeptIds.includes(deptId) ? 1 : 0,
-      avatar_emoji: resolveAvatar(deptId, nextOrder),
-      sprite_number: resolveSeedSpriteNumber({
+    const spriteNumber = resolveSeedSpriteNumber(
+      {
         packKey,
         deptId,
         role,
         order: nextOrder,
-      }),
+      },
+      usedSpriteNumbers,
+    );
+    usedSpriteNumbers.add(spriteNumber);
+    result.push({
+      ...localizedNames,
+      department_id: deptId,
+      seed_order_in_department: nextOrder,
+      role,
+      acts_as_planning_leader: role === "team_leader" && planningLeadDeptIds.includes(deptId) ? 1 : 0,
+      avatar_emoji: resolveAvatar(deptId, nextOrder),
+      sprite_number: spriteNumber,
       personality: buildSeedPersonality({
         packKey,
         deptId,

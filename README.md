@@ -78,6 +78,10 @@ Claw-Empire transforms your AI coding assistants — connected via **CLI**, **OA
 - **In-messenger `/new` session reset** - Added localized reset ACK flow to clear direct-chat session bindings and start fresh conversation context.
 - **Decision notice readability v2** - Improved planning summary compactness, option preview formatting, and recommendation line clarity for mobile messenger readability.
 - **Regression coverage expansion** - Added targeted tests for token-aware routing, Telegram receiver behavior, office pack normalization/sync, and related routing paths.
+- **Video pre-production render flow hardening** - Stabilized `video_preprod` final-render orchestration (`VIDEO_FINAL_RENDER`) with seed-time creation, deferred delegation, stale-state reconciliation, and duplicate-trigger prevention.
+- **Office pack first-load hydration and persistence** - Added first-entry seed bootstrap per pack, then switched hydrated packs to DB-backed persistence to keep user customizations (including provider edits) stable.
+- **Report output policy upgrade (HTML + PPTX)** - Report office output policy now targets both HTML and PPTX; `python-pptx` fallback is restricted to PPT Team unavailable/hard-fail cases.
+- **Core runtime fix bundle on existing flows** - Hardened branch-collision worktree recovery, preserved Claude `--no-tools` argv semantics, and stabilized YOLO/WebSocket retry behavior.
 
 - Full notes: [`docs/releases/v1.2.4.md`](docs/releases/v1.2.4.md)
 - API docs: [`docs/api.md`](docs/api.md), [`docs/openapi.json`](docs/openapi.json)

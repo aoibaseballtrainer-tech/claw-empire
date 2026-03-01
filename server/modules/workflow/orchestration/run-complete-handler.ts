@@ -208,6 +208,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
             project_id: task.project_id,
             project_path: task.project_path,
             department_id: task.department_id,
+            workflow_pack_key: task.workflow_pack_key,
           });
           const candidateRelativePaths = resolveVideoArtifactRelativeCandidates(videoArtifactSpec);
           const wtInfo = taskWorktrees.get(taskId) as

@@ -78,6 +78,10 @@ Claw-Empire는 **CLI**, **OAuth**, **직접 API 키** 방식으로 연결된 AI 
 - **메신저 `/new` 세션 초기화** - `/new` 명령으로 직접채팅 세션 바인딩을 초기화하고, 다국어 ACK와 함께 새 대화를 시작합니다.
 - **의사결정 메시지 가독성 v2** - 기획팀장 요약, 선택지 미리보기, 추천 선택지 표기를 더 짧고 명확하게 정리했습니다.
 - **회귀 테스트 확장** - 토큰 인지 라우팅, 텔레그램 수신, 오피스 팩 정규화/동기화 등 핵심 경로 테스트를 보강했습니다.
+- **영상 프리프로덕션 렌더 플로우 안정화** - `video_preprod`의 `VIDEO_FINAL_RENDER` 흐름을 계획 단계 시드 생성, 지연 위임, stale 상태 복구, 중복 트리거 방지까지 포함해 보강했습니다.
+- **오피스팩 첫 로드 hydrate 및 영속화** - 팩별 최초 진입 시 시드 부트스트랩을 수행하고, 이후 hydrated 팩은 DB 기반으로 고정해 사용자 커스텀(프로바이더 변경 포함)을 안정적으로 유지합니다.
+- **보고서 출력 정책 고도화(HTML + PPTX)** - 보고서 오피스 출력 정책을 HTML+PPTX 동시 산출로 정리했고, `python-pptx`는 PPT Team 불가/하드 실패 시에만 fallback으로 제한했습니다.
+- **기존 런타임 안정화 Fix 묶음** - worktree 브랜치 충돌 복구, Claude `--no-tools` 인자 보존, YOLO/WebSocket 재시도 안정화를 반영했습니다.
 
 - 상세 문서: [`docs/releases/v1.2.4.md`](docs/releases/v1.2.4.md)
 - API 문서: [`docs/api.md`](docs/api.md), [`docs/openapi.json`](docs/openapi.json)

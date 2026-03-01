@@ -136,27 +136,55 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     )
   )`;
 
-    const tasks = db
-      .prepare(
-        `
-    SELECT t.*,
-      a.name AS agent_name,
-      a.avatar_emoji AS agent_avatar,
-      d.name AS department_name,
-      d.icon AS department_icon,
-      p.name AS project_name,
-      p.core_goal AS project_core_goal,
-      ${subtaskTotalExpr} AS subtask_total,
-      ${subtaskDoneExpr} AS subtask_done
-    FROM tasks t
-    LEFT JOIN agents a ON t.assigned_agent_id = a.id
-    LEFT JOIN departments d ON t.department_id = d.id
-    LEFT JOIN projects p ON t.project_id = p.id
-    ${where}
-    ORDER BY t.priority DESC, t.updated_at DESC
-  `,
-      )
-      .all(...(params as SQLInputValue[]));
+    let tasks: unknown[];
+    try {
+      tasks = db
+        .prepare(
+          `
+      SELECT t.*,
+        a.name AS agent_name,
+        a.avatar_emoji AS agent_avatar,
+        COALESCE(opd.name, d.name) AS department_name,
+        COALESCE(opd.icon, d.icon) AS department_icon,
+        p.name AS project_name,
+        p.core_goal AS project_core_goal,
+        ${subtaskTotalExpr} AS subtask_total,
+        ${subtaskDoneExpr} AS subtask_done
+      FROM tasks t
+      LEFT JOIN agents a ON t.assigned_agent_id = a.id
+      LEFT JOIN office_pack_departments opd
+        ON opd.workflow_pack_key = COALESCE(t.workflow_pack_key, 'development')
+       AND opd.department_id = t.department_id
+      LEFT JOIN departments d ON t.department_id = d.id
+      LEFT JOIN projects p ON t.project_id = p.id
+      ${where}
+      ORDER BY t.priority DESC, t.updated_at DESC
+    `,
+        )
+        .all(...(params as SQLInputValue[]));
+    } catch {
+      tasks = db
+        .prepare(
+          `
+      SELECT t.*,
+        a.name AS agent_name,
+        a.avatar_emoji AS agent_avatar,
+        d.name AS department_name,
+        d.icon AS department_icon,
+        p.name AS project_name,
+        p.core_goal AS project_core_goal,
+        ${subtaskTotalExpr} AS subtask_total,
+        ${subtaskDoneExpr} AS subtask_done
+      FROM tasks t
+      LEFT JOIN agents a ON t.assigned_agent_id = a.id
+      LEFT JOIN departments d ON t.department_id = d.id
+      LEFT JOIN projects p ON t.project_id = p.id
+      ${where}
+      ORDER BY t.priority DESC, t.updated_at DESC
+    `,
+        )
+        .all(...(params as SQLInputValue[]));
+    }
 
     res.json({ tasks });
   });
@@ -289,27 +317,55 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
        )
     )
   )`;
-    const task = db
-      .prepare(
-        `
-    SELECT t.*,
-      a.name AS agent_name,
-      a.avatar_emoji AS agent_avatar,
-      a.cli_provider AS agent_provider,
-      d.name AS department_name,
-      d.icon AS department_icon,
-      p.name AS project_name,
-      p.core_goal AS project_core_goal,
-      ${subtaskTotalExpr} AS subtask_total,
-      ${subtaskDoneExpr} AS subtask_done
-    FROM tasks t
-    LEFT JOIN agents a ON t.assigned_agent_id = a.id
-    LEFT JOIN departments d ON t.department_id = d.id
-    LEFT JOIN projects p ON t.project_id = p.id
-    WHERE t.id = ?
-  `,
-      )
-      .get(id);
+    let task: unknown;
+    try {
+      task = db
+        .prepare(
+          `
+      SELECT t.*,
+        a.name AS agent_name,
+        a.avatar_emoji AS agent_avatar,
+        a.cli_provider AS agent_provider,
+        COALESCE(opd.name, d.name) AS department_name,
+        COALESCE(opd.icon, d.icon) AS department_icon,
+        p.name AS project_name,
+        p.core_goal AS project_core_goal,
+        ${subtaskTotalExpr} AS subtask_total,
+        ${subtaskDoneExpr} AS subtask_done
+      FROM tasks t
+      LEFT JOIN agents a ON t.assigned_agent_id = a.id
+      LEFT JOIN office_pack_departments opd
+        ON opd.workflow_pack_key = COALESCE(t.workflow_pack_key, 'development')
+       AND opd.department_id = t.department_id
+      LEFT JOIN departments d ON t.department_id = d.id
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.id = ?
+    `,
+        )
+        .get(id);
+    } catch {
+      task = db
+        .prepare(
+          `
+      SELECT t.*,
+        a.name AS agent_name,
+        a.avatar_emoji AS agent_avatar,
+        a.cli_provider AS agent_provider,
+        d.name AS department_name,
+        d.icon AS department_icon,
+        p.name AS project_name,
+        p.core_goal AS project_core_goal,
+        ${subtaskTotalExpr} AS subtask_total,
+        ${subtaskDoneExpr} AS subtask_done
+      FROM tasks t
+      LEFT JOIN agents a ON t.assigned_agent_id = a.id
+      LEFT JOIN departments d ON t.department_id = d.id
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.id = ?
+    `,
+        )
+        .get(id);
+    }
     if (!task) return res.status(404).json({ error: "not_found" });
 
     const logs = db.prepare("SELECT * FROM task_logs WHERE task_id = ? ORDER BY created_at DESC LIMIT 200").all(id);

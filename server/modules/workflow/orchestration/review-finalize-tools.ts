@@ -335,6 +335,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
         project_id: currentTask.project_id,
         project_path: currentTask.project_path,
         department_id: currentTask.department_id,
+        workflow_pack_key: currentTask.workflow_pack_key,
       });
       const candidateRelativePaths = resolveVideoArtifactRelativeCandidates(videoArtifactSpec);
       const candidatePaths = [

@@ -57,9 +57,10 @@ export function useAppBootstrapData({
       // Settings is loaded first because server-side /api/settings can trigger one-time
       // office-pack hydration, and we want follow-up agent/department fetches to include it.
       const sett = await api.getSettings();
-      const includeSeedAgents = normalizeOfficeWorkflowPack(sett.officeWorkflowPack ?? "development") !== "development";
+      const activePackKey = normalizeOfficeWorkflowPack(sett.officeWorkflowPack ?? "development");
+      const includeSeedAgents = activePackKey !== "development";
       const [depts, ags, tks, sts, subs, presence, decisionItems] = await Promise.all([
-        api.getDepartments(),
+        api.getDepartments({ workflowPackKey: activePackKey }),
         api.getAgents({ includeSeed: includeSeedAgents }),
         api.getTasks(),
         api.getStats(),

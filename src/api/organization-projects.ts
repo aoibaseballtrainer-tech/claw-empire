@@ -14,13 +14,24 @@ import type {
 } from "../types";
 
 // Departments
-export async function getDepartments(): Promise<Department[]> {
-  const j = await request<{ departments: Department[] }>("/api/departments");
+export async function getDepartments(options?: { workflowPackKey?: WorkflowPackKey; includeSeed?: boolean }): Promise<Department[]> {
+  const params = new URLSearchParams();
+  if (options?.workflowPackKey) params.set("workflow_pack_key", options.workflowPackKey);
+  if (options?.includeSeed) params.set("include_seed", "1");
+  const query = params.toString();
+  const j = await request<{ departments: Department[] }>(`/api/departments${query ? `?${query}` : ""}`);
   return j.departments;
 }
 
-export async function getDepartment(id: string): Promise<{ department: Department; agents: Agent[] }> {
-  return request(`/api/departments/${id}`);
+export async function getDepartment(
+  id: string,
+  options?: { workflowPackKey?: WorkflowPackKey; includeSeed?: boolean },
+): Promise<{ department: Department; agents: Agent[] }> {
+  const params = new URLSearchParams();
+  if (options?.workflowPackKey) params.set("workflow_pack_key", options.workflowPackKey);
+  if (options?.includeSeed) params.set("include_seed", "1");
+  const query = params.toString();
+  return request(`/api/departments/${id}${query ? `?${query}` : ""}`);
 }
 
 export async function createDepartment(data: {
@@ -33,6 +44,7 @@ export async function createDepartment(data: {
   color?: string;
   description?: string;
   prompt?: string;
+  workflow_pack_key?: WorkflowPackKey;
 }): Promise<Department> {
   const j = await request<{ department: Department }>("/api/departments", {
     method: "POST",
@@ -49,17 +61,32 @@ export async function updateDepartment(
       Department,
       "name" | "name_ko" | "name_ja" | "name_zh" | "icon" | "color" | "description" | "prompt" | "sort_order"
     >
-  >,
+  > & { workflow_pack_key?: WorkflowPackKey },
 ): Promise<void> {
-  await patch(`/api/departments/${id}`, data);
+  const params = new URLSearchParams();
+  if (data.workflow_pack_key) params.set("workflow_pack_key", data.workflow_pack_key);
+  const query = params.toString();
+  await patch(`/api/departments/${id}${query ? `?${query}` : ""}`, data);
 }
 
-export async function deleteDepartment(id: string): Promise<void> {
-  await del(`/api/departments/${id}`);
+export async function deleteDepartment(id: string, options?: { workflowPackKey?: WorkflowPackKey }): Promise<void> {
+  const params = new URLSearchParams();
+  if (options?.workflowPackKey) params.set("workflow_pack_key", options.workflowPackKey);
+  const query = params.toString();
+  await del(`/api/departments/${id}${query ? `?${query}` : ""}`);
 }
 
-export async function reorderDepartments(orders: { id: string; sort_order: number }[]): Promise<void> {
-  await patch("/api/departments/reorder", { orders });
+export async function reorderDepartments(
+  orders: { id: string; sort_order: number }[],
+  options?: { workflowPackKey?: WorkflowPackKey },
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (options?.workflowPackKey) params.set("workflow_pack_key", options.workflowPackKey);
+  const query = params.toString();
+  await patch(`/api/departments/reorder${query ? `?${query}` : ""}`, {
+    orders,
+    ...(options?.workflowPackKey ? { workflow_pack_key: options.workflowPackKey } : {}),
+  });
 }
 
 // Agents
@@ -124,6 +151,7 @@ export async function createAgent(data: {
   avatar_emoji: string;
   sprite_number?: number | null;
   personality: string | null;
+  workflow_pack_key?: WorkflowPackKey;
 }): Promise<Agent> {
   const j = (await post("/api/agents", data)) as { ok: boolean; agent: Agent };
   return j.agent;

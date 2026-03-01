@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Department } from "../types";
-import { buildOfficePackPresentation, buildOfficePackStarterAgents } from "./office-workflow-pack";
+import {
+  buildOfficePackPresentation,
+  buildOfficePackStarterAgents,
+  resolveOfficePackSeedProvider,
+} from "./office-workflow-pack";
 
 function makeDepartment(id: string): Department {
   return {
@@ -62,6 +66,79 @@ describe("buildOfficePackStarterAgents", () => {
       locale: "ja",
     });
     expect(startersJa.some((agent) => (agent.personality ?? "").includes("最優先"))).toBe(true);
+  });
+
+  it("starter 초안은 부서 내 순번(seed_order_in_department)을 기록한다", () => {
+    const starters = buildOfficePackStarterAgents({
+      packKey: "report",
+      departments: [makeDepartment("planning"), makeDepartment("dev"), makeDepartment("design"), makeDepartment("qa")],
+      targetCount: 8,
+    });
+    const planningOrders = starters
+      .filter((agent) => agent.department_id === "planning")
+      .map((agent) => agent.seed_order_in_department);
+    expect(planningOrders.length).toBeGreaterThan(1);
+    expect(planningOrders[0]).toBe(1);
+    expect(planningOrders[1]).toBe(2);
+  });
+
+  it("오피스팩 seed 직원은 가능한 범위에서 sprite_number를 중복 없이 배정한다", () => {
+    const starters = buildOfficePackStarterAgents({
+      packKey: "video_preprod",
+      departments: [
+        makeDepartment("planning"),
+        makeDepartment("dev"),
+        makeDepartment("design"),
+        makeDepartment("qa"),
+        makeDepartment("operations"),
+        makeDepartment("devsecops"),
+      ],
+      targetCount: 10,
+    });
+    const spriteNumbers = starters.map((agent) => agent.sprite_number);
+    const unique = new Set(spriteNumbers);
+    expect(unique.size).toBe(spriteNumbers.length);
+  });
+});
+
+describe("resolveOfficePackSeedProvider", () => {
+  it("기획팀은 claude/codex를 번갈아 배치한다", () => {
+    expect(
+      resolveOfficePackSeedProvider({
+        packKey: "report",
+        departmentId: "planning",
+        role: "team_leader",
+        seedIndex: 1,
+        seedOrderInDepartment: 1,
+      }),
+    ).toBe("claude");
+    expect(
+      resolveOfficePackSeedProvider({
+        packKey: "report",
+        departmentId: "planning",
+        role: "senior",
+        seedIndex: 5,
+        seedOrderInDepartment: 2,
+      }),
+    ).toBe("codex");
+  });
+
+  it("개발/디자인은 claude, 인프라보안/운영/QA는 codex를 사용한다", () => {
+    expect(resolveOfficePackSeedProvider({ packKey: "report", departmentId: "dev", role: "senior", seedIndex: 2 })).toBe(
+      "claude",
+    );
+    expect(
+      resolveOfficePackSeedProvider({ packKey: "report", departmentId: "design", role: "senior", seedIndex: 3 }),
+    ).toBe("claude");
+    expect(resolveOfficePackSeedProvider({ packKey: "report", departmentId: "devsecops", role: "senior", seedIndex: 4 })).toBe(
+      "codex",
+    );
+    expect(
+      resolveOfficePackSeedProvider({ packKey: "report", departmentId: "operations", role: "senior", seedIndex: 5 }),
+    ).toBe("codex");
+    expect(resolveOfficePackSeedProvider({ packKey: "report", departmentId: "qa", role: "senior", seedIndex: 6 })).toBe(
+      "codex",
+    );
   });
 });
 
