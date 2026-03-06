@@ -16,10 +16,11 @@ interface LayoutOptions {
   canonicalUrl?: string;
   body: string;
   settings: SiteSettings;
+  extraHead?: string;
 }
 
 export function renderLayout(opts: LayoutOptions): string {
-  const { title, description, ogImage, body, settings } = opts;
+  const { title, description, ogImage, body, settings, extraHead } = opts;
   const siteName = settings.company_name || "PROST AI";
   const fullTitle = title === siteName ? title : `${title} | ${siteName}`;
   const desc = description || settings.tagline || "";
@@ -58,6 +59,7 @@ export function renderLayout(opts: LayoutOptions): string {
     body { font-family: 'Noto Sans JP', sans-serif; }
     .gradient-bg { background: linear-gradient(135deg, ${primaryColor} 0%, #4f46e5 100%); }
   </style>
+  ${extraHead || ""}
 </head>
 <body class="min-h-screen bg-white text-gray-800">
   <!-- Navigation -->

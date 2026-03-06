@@ -24,6 +24,11 @@ export function markdownToHtml(md: string): string {
   // Images ![alt](url)
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<figure class="my-6"><img src="$2" alt="$1" class="w-full rounded-xl shadow-sm" loading="lazy" /><figcaption class="text-center text-sm text-gray-400 mt-2">$1</figcaption></figure>');
 
+  // Callout boxes :::point / :::warning / :::check
+  html = html.replace(/:::point\n([\s\S]*?):::/g, '<div class="bg-blue-50 border border-blue-100 rounded-xl p-5 my-6"><p class="text-blue-800 font-semibold text-sm mb-1 flex items-center gap-1.5"><span>💡</span> ポイント</p><div class="text-blue-900 text-sm leading-relaxed">$1</div></div>');
+  html = html.replace(/:::warning\n([\s\S]*?):::/g, '<div class="bg-amber-50 border border-amber-100 rounded-xl p-5 my-6"><p class="text-amber-800 font-semibold text-sm mb-1 flex items-center gap-1.5"><span>⚠️</span> 注意</p><div class="text-amber-900 text-sm leading-relaxed">$1</div></div>');
+  html = html.replace(/:::check\n([\s\S]*?):::/g, '<div class="bg-green-50 border border-green-100 rounded-xl p-5 my-6"><p class="text-green-800 font-semibold text-sm mb-1 flex items-center gap-1.5"><span>✅</span> チェック</p><div class="text-green-900 text-sm leading-relaxed">$1</div></div>');
+
   // Blockquote > text
   html = html.replace(/^&gt; (.+)$/gm, "<blockquote-line>$1</blockquote-line>");
   html = html.replace(/(<blockquote-line>.*<\/blockquote-line>\n?)+/g, (match) => {
