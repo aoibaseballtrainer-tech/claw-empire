@@ -91,6 +91,14 @@ export async function replyDecisionInbox(
   });
 }
 
+function resolveStaffSender(): { sender_type: string; sender_name?: string } {
+  if (typeof window !== "undefined") {
+    const staffName = window.localStorage.getItem("claw_staff_name");
+    if (staffName) return { sender_type: "staff", sender_name: staffName };
+  }
+  return { sender_type: "ceo" };
+}
+
 export async function sendMessage(input: {
   receiver_type: ReceiverType;
   receiver_id?: string;
@@ -104,7 +112,7 @@ export async function sendMessage(input: {
   const idempotencyKey = makeIdempotencyKey("ceo-message");
   const j = await postWithIdempotency<{ id?: string; message?: { id?: string } }>(
     "/api/messages",
-    { sender_type: "ceo", ...input },
+    { ...resolveStaffSender(), ...input },
     idempotencyKey,
   );
   return extractMessageId(j);
@@ -143,6 +151,18 @@ export async function sendDirectiveWithProject(input: {
     idempotencyKey,
   );
   return extractMessageId(j);
+}
+
+// Staff-to-staff chat
+export async function getStaffMessages(limit = 100): Promise<Message[]> {
+  const j = await request<{ messages: Message[] }>(`/api/staff-messages?limit=${limit}`);
+  return j.messages;
+}
+
+export async function sendStaffMessage(content: string): Promise<Message> {
+  const staffName = typeof window !== "undefined" ? window.localStorage.getItem("claw_staff_name") ?? "Staff" : "Staff";
+  const j = await post("/api/staff-messages", { content, sender_name: staffName }) as { message: Message };
+  return j.message;
 }
 
 export async function clearMessages(agentId?: string): Promise<void> {

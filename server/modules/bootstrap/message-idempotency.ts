@@ -19,6 +19,7 @@ export type StoredMessage = {
   id: string;
   sender_type: string;
   sender_id: string | null;
+  sender_name: string | null;
   receiver_type: string;
   receiver_id: string | null;
   content: string;
@@ -31,6 +32,7 @@ export type StoredMessage = {
 export type MessageInsertInput = {
   senderType: string;
   senderId: string | null;
+  senderName?: string | null;
   receiverType: string;
   receiverId: string | null;
   content: string;
@@ -105,7 +107,7 @@ function findMessageByIdempotencyKey(db: DbLike, idempotencyKey: string): Stored
   const row = db
     .prepare(
       `
-    SELECT id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, idempotency_key, created_at
+    SELECT id, sender_type, sender_id, sender_name, receiver_type, receiver_id, content, message_type, task_id, idempotency_key, created_at
     FROM messages
     WHERE idempotency_key = ?
     LIMIT 1
@@ -194,19 +196,21 @@ export function createMessageIdempotencyTools(deps: MessageIdempotencyDeps) {
 
     const id = randomUUID();
     const createdAt = nowMs();
+    const senderName = input.senderName ?? null;
     try {
       db.prepare(
         `
       INSERT INTO messages (
-        id, sender_type, sender_id, receiver_type, receiver_id,
+        id, sender_type, sender_id, sender_name, receiver_type, receiver_id,
         content, message_type, task_id, idempotency_key, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       ).run(
         id,
         input.senderType,
         input.senderId,
+        senderName,
         input.receiverType,
         input.receiverId,
         input.content,
@@ -233,6 +237,7 @@ export function createMessageIdempotencyTools(deps: MessageIdempotencyDeps) {
         id,
         sender_type: input.senderType,
         sender_id: input.senderId,
+        sender_name: senderName,
         receiver_type: input.receiverType,
         receiver_id: input.receiverId,
         content: input.content,

@@ -75,6 +75,12 @@ export function useAppLabels({
           ja: "スキル資料室",
           zh: "技能库",
         })}`;
+      case "threads":
+        return "🧵 Threads";
+      case "meo":
+        return "📍 MEO";
+      case "gmail":
+        return "📧 Gmail";
       case "settings":
         return `⚙️ ${pickLang(uiLanguage, {
           ko: "설정",

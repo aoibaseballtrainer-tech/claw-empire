@@ -1,4 +1,6 @@
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import StaffNameModal from "./components/StaffNameModal";
+import LoginPage from "./components/LoginPage";
 import type { DecisionInboxItem } from "./components/chat/decision-inbox";
 import { useWebSocket } from "./hooks/useWebSocket";
 import type {
@@ -20,6 +22,8 @@ import type {
 } from "./types";
 import type { TaskReportDetail } from "./api";
 import * as api from "./api";
+import { getCurrentUser, logoutUser } from "./api/core";
+import type { UserAuthInfo } from "./api/core";
 import { detectBrowserLanguage, normalizeLanguage } from "./i18n";
 import { useTheme } from "./ThemeContext";
 import { ROOM_THEMES_STORAGE_KEY, UPDATE_BANNER_DISMISS_STORAGE_KEY } from "./app/constants";
@@ -54,10 +58,76 @@ export type { OAuthCallbackResult } from "./app/types";
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
+
+  // -------------------------------------------------------------------------
+  // User authentication state
+  // -------------------------------------------------------------------------
+  const [userAuth, setUserAuth] = useState<UserAuthInfo | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentUser().then((user) => {
+      if (cancelled) return;
+      setUserAuth(user);
+      setAuthChecked(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    await logoutUser();
+    setUserAuth(null);
+  }, []);
+
+  // Show loading spinner while checking auth
+  if (!authChecked) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #312e81 70%, #1e1b4b 100%)",
+        }}
+      >
+        <div className="w-8 h-8 border-3 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!userAuth) {
+    return <LoginPage onLogin={(user) => setUserAuth(user)} />;
+  }
+
+  return <AppMain theme={theme} toggleTheme={toggleTheme} userAuth={userAuth} onLogout={handleLogout} />;
+}
+
+// ---------------------------------------------------------------------------
+// AppMain — the actual app, shown only after authentication
+// ---------------------------------------------------------------------------
+function AppMain({
+  theme,
+  toggleTheme,
+  userAuth,
+  onLogout,
+}: {
+  theme: string;
+  toggleTheme: () => void;
+  userAuth: UserAuthInfo;
+  onLogout: () => void;
+}) {
   const initialRoomThemes = useMemo(() => readStoredRoomThemes(), []);
   const hasLocalRoomThemesRef = useRef<boolean>(initialRoomThemes.hasStored);
 
-  const [view, setView] = useState<View>("office");
+  const [view, setViewRaw] = useState<View>(() => {
+    const hash = window.location.hash.replace("#", "") as View;
+    const validViews: View[] = ["office", "agents", "dashboard", "tasks", "skills", "threads", "meo", "gmail", "website", "daily-tasks", "settings"];
+    return validViews.includes(hash) ? hash : "office";
+  });
+  const setView = useCallback((v: View) => {
+    setViewRaw(v);
+    window.location.hash = v === "office" ? "" : v;
+  }, []);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -70,6 +140,13 @@ export default function App() {
   const [subAgents, setSubAgents] = useState<SubAgent[]>([]);
   const [subtasks, setSubtasks] = useState<SubTask[]>([]);
 
+  const [staffName, setStaffNameRaw] = useState<string | null>(() =>
+    localStorage.getItem("claw_staff_name"),
+  );
+  const setStaffName = useCallback((name: string) => {
+    localStorage.setItem("claw_staff_name", name);
+    setStaffNameRaw(name);
+  }, []);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [chatAgent, setChatAgent] = useState<Agent | null>(null);
   const [showChat, setShowChat] = useState(false);
@@ -84,6 +161,7 @@ export default function App() {
   const [showReportHistory, setShowReportHistory] = useState(false);
   const [showAgentStatus, setShowAgentStatus] = useState(false);
   const [showRoomManager, setShowRoomManager] = useState(false);
+  const [showAiAsk, setShowAiAsk] = useState(false);
   const [showDecisionInbox, setShowDecisionInbox] = useState(false);
   const [decisionInboxLoading, setDecisionInboxLoading] = useState(false);
   const [decisionInboxItems, setDecisionInboxItems] = useState<DecisionInboxItem[]>([]);
@@ -389,6 +467,10 @@ export default function App() {
     );
   }
 
+  if (!staffName) {
+    return <StaffNameModal onSubmit={setStaffName} />;
+  }
+
   return (
     <AppMainLayout
       connected={connected}
@@ -422,7 +504,7 @@ export default function App() {
       onCrossDeptDeliveryProcessed={(id) => setCrossDeptDeliveries((prev) => prev.filter((d) => d.id !== id))}
       onCeoOfficeCallProcessed={(id) => setCeoOfficeCalls((prev) => prev.filter((d) => d.id !== id))}
       onOpenActiveMeetingMinutes={(taskId) => setTaskPanel({ taskId, tab: "minutes" })}
-      onSelectAgent={setSelectedAgent}
+      onSelectAgent={(agent) => actions.handleOpenChat(agent)}
       onSelectDepartment={(department) => {
         const candidateAgents = overlayAgents;
         const leader =
@@ -454,7 +536,12 @@ export default function App() {
       onOpenAgentStatus={() => setShowAgentStatus(true)}
       onOpenReportHistory={() => setShowReportHistory(true)}
       onOpenAnnouncement={actions.handleOpenAnnouncement}
+      onOpenStaffChat={() => {
+        setChatAgent(null);
+        setShowChat(true);
+      }}
       onOpenRoomManager={() => setShowRoomManager(true)}
+      onOpenAiAsk={() => setShowAiAsk(true)}
       onDismissAutoUpdateNotice={actions.handleDismissAutoUpdateNotice}
       onDismissUpdate={() => {
         const latest = labels.effectiveUpdateStatus?.latest_version ?? "";
@@ -464,6 +551,8 @@ export default function App() {
         }
       }}
       officePackBootstrappingLabel={officePackBootstrappingLabel}
+      userAuth={userAuth}
+      onLogout={onLogout}
     >
       <AppOverlays
         showChat={showChat}
@@ -561,6 +650,8 @@ export default function App() {
           setShowRoomManager(false);
           setActiveRoomThemeTargetId(null);
         }}
+        showAiAsk={showAiAsk}
+        onCloseAiAsk={() => setShowAiAsk(false)}
       />
     </AppMainLayout>
   );

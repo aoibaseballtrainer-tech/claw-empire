@@ -1,4 +1,4 @@
-type ChatMode = "chat" | "task" | "announcement" | "report";
+type ChatMode = "chat" | "task" | "announcement" | "report" | "staff_chat";
 
 type Tr = (ko: string, en: string, ja?: string, zh?: string) => string;
 
@@ -54,6 +54,17 @@ export default function ChatModeHint({ mode, isDirectiveMode, tr }: ChatModeHint
                 "Report mode - request report/deck authoring",
                 "レポート依頼モード — レポート/資料作成を依頼します",
                 "报告请求模式 — 请求撰写报告/演示资料",
+              )}
+            </p>
+          )}
+          {mode === "staff_chat" && (
+            <p className="text-xs text-purple-400">
+              👥{" "}
+              {tr(
+                "팀 채팅 — 스태프끼리 메시지를 주고받습니다",
+                "Team chat - staff-to-staff messages",
+                "チームチャット — スタッフ同士でメッセージのやり取り",
+                "团队聊天 — 员工间消息交流",
               )}
             </p>
           )}

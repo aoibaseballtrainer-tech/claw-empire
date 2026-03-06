@@ -8,6 +8,9 @@ import { notifyTaskStatus } from "../gateway/client.ts";
 import { startDiscordReceiver } from "../messenger/discord-receiver.ts";
 import { startTelegramReceiver } from "../messenger/telegram-receiver.ts";
 import { registerGracefulShutdownHandlers } from "./lifecycle/register-graceful-shutdown.ts";
+import { registerPublicSiteRoutes, isPublicSiteHost } from "./routes/public-site.ts";
+import { startBlogAutoGenScheduler } from "./routes/ops/blog-autogen.ts";
+import { startDailyTasksScheduler } from "./routes/ops/daily-tasks.ts";
 
 export function startLifecycle(ctx: RuntimeContext): void {
   const {
@@ -51,6 +54,11 @@ export function startLifecycle(ctx: RuntimeContext): void {
   } = ctx as any;
 
   // ---------------------------------------------------------------------------
+  // Public site: prost-ai.com (must be registered BEFORE SPA fallback)
+  // ---------------------------------------------------------------------------
+  registerPublicSiteRoutes({ app, db });
+
+  // ---------------------------------------------------------------------------
   // Production: serve React UI from dist/
   // ---------------------------------------------------------------------------
   if (isProduction) {
@@ -66,6 +74,10 @@ export function startLifecycle(ctx: RuntimeContext): void {
         },
       ) => {
         if (req.path.startsWith("/api/") || req.path === "/health" || req.path === "/healthz") {
+          return res.status(404).json({ error: "not_found" });
+        }
+        // Don't serve SPA for public site hosts
+        if (isPublicSiteHost(req as any)) {
           return res.status(404).json({ error: "not_found" });
         }
         res.sendFile(path.join(distDir, "index.html"));
@@ -413,6 +425,8 @@ export function startLifecycle(ctx: RuntimeContext): void {
   setTimeout(sweepPendingSubtaskDelegations, 4_000);
   setInterval(sweepPendingSubtaskDelegations, SUBTASK_DELEGATION_SWEEP_MS);
   setTimeout(autoAssignAgentProviders, 4_000);
+  setTimeout(() => startBlogAutoGenScheduler(db), 6_000);
+  setTimeout(() => startDailyTasksScheduler(db), 8_000);
   const telegramReceiver = startTelegramReceiver({ db });
   const discordReceiver = startDiscordReceiver({ db });
 

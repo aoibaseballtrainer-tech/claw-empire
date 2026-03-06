@@ -9,6 +9,7 @@ import {
   SESSION_AUTH_TOKEN,
   SESSION_COOKIE_NAME,
 } from "../config/runtime.ts";
+import { getUserSessionCookie, lookupUserSession, userSessionCsrfToken } from "../modules/routes/ops/user-auth.ts";
 
 const CSRF_TOKEN = createHash("sha256").update(`csrf:${SESSION_AUTH_TOKEN}`, "utf8").digest("hex");
 const TASK_INTERRUPT_TOKEN_SCOPE = "task_interrupt_v1";
@@ -84,7 +85,15 @@ export function shouldRequireCsrf(req: Request): boolean {
 export function hasValidCsrfToken(req: Request): boolean {
   const token = csrfTokenFromRequest(req);
   if (!token) return false;
-  return safeSecretEquals(token, CSRF_TOKEN);
+  // Check API CSRF token
+  if (safeSecretEquals(token, CSRF_TOKEN)) return true;
+  // Check user session CSRF token
+  const userToken = getUserSessionCookie(req);
+  if (userToken) {
+    const expectedUserCsrf = userSessionCsrfToken(userToken);
+    if (safeSecretEquals(token, expectedUserCsrf)) return true;
+  }
+  return false;
 }
 
 export function buildTaskInterruptControlToken(taskId: string, sessionId: string): string {
@@ -106,10 +115,19 @@ export function cookieToken(req: Request): string | null {
 }
 
 export function isAuthenticated(req: Request): boolean {
+  // 1. Check Bearer token (API-to-API calls, webhooks)
   const bearer = bearerToken(req);
   if (bearer && bearer === SESSION_AUTH_TOKEN) return true;
+  // 2. Check legacy session cookie
   const token = cookieToken(req);
-  return token === SESSION_AUTH_TOKEN;
+  if (token === SESSION_AUTH_TOKEN) return true;
+  // 3. Check user session cookie (login-based auth)
+  const userToken = getUserSessionCookie(req);
+  if (userToken) {
+    const user = lookupUserSession(userToken);
+    if (user) return true;
+  }
+  return false;
 }
 
 export function shouldUseSecureCookie(req: Request): boolean {
@@ -132,11 +150,15 @@ export function issueSessionCookie(req: Request, res: Response): void {
 export function isPublicApiPath(pathname: string): boolean {
   if (pathname === "/api/health") return true;
   if (pathname === "/api/auth/session") return true;
+  if (pathname === "/api/auth/login") return true;
+  if (pathname === "/api/auth/me") return true;
+  if (pathname === "/api/auth/logout") return true;
   if (pathname === "/api/inbox") return true;
   if (pathname === "/api/openapi.json") return true;
   if (pathname === "/api/docs" || pathname.startsWith("/api/docs/")) return true;
   if (pathname === "/api/oauth/start") return true;
   if (pathname.startsWith("/api/oauth/callback/")) return true;
+  if (pathname.startsWith("/api/site/")) return true;
   return false;
 }
 
@@ -166,7 +188,22 @@ export function isIncomingMessageAuthenticated(req: IncomingMessage): boolean {
   const bearer = incomingMessageBearerToken(req);
   if (bearer && bearer === SESSION_AUTH_TOKEN) return true;
   const cookie = incomingMessageCookieToken(req);
-  return cookie === SESSION_AUTH_TOKEN;
+  if (cookie === SESSION_AUTH_TOKEN) return true;
+  // Check user session cookie in raw cookie header
+  const rawCookie = req.headers.cookie;
+  if (rawCookie && typeof rawCookie === "string") {
+    for (const part of rawCookie.split(";")) {
+      const idx = part.indexOf("=");
+      if (idx <= 0) continue;
+      const key = part.slice(0, idx).trim();
+      if (key !== "claw_user") continue;
+      const value = part.slice(idx + 1).trim();
+      let decoded: string;
+      try { decoded = decodeURIComponent(value); } catch { decoded = value; }
+      if (decoded && lookupUserSession(decoded)) return true;
+    }
+  }
+  return false;
 }
 
 export function isIncomingMessageOriginTrusted(req: IncomingMessage): boolean {
@@ -200,13 +237,23 @@ export function installSecurityMiddleware(app: Express): void {
   app.use(express.json({ limit: "12mb" }));
 
   app.get("/api/auth/session", (req, res) => {
+    // Check Bearer token or loopback (original flow)
     const bearer = bearerToken(req);
     const hasBearerAuth = bearer === SESSION_AUTH_TOKEN;
-    if (!isLoopbackRequest(req) && !hasBearerAuth) {
-      return res.status(401).json({ error: "unauthorized" });
+    if (isLoopbackRequest(req) || hasBearerAuth) {
+      issueSessionCookie(req, res);
+      return res.json({ ok: true, csrf_token: CSRF_TOKEN });
     }
-    issueSessionCookie(req, res);
-    res.json({ ok: true, csrf_token: CSRF_TOKEN });
+    // Check user session cookie (login-based flow)
+    const userToken = getUserSessionCookie(req);
+    if (userToken) {
+      const user = lookupUserSession(userToken);
+      if (user) {
+        const csrf = userSessionCsrfToken(userToken);
+        return res.json({ ok: true, csrf_token: csrf });
+      }
+    }
+    return res.status(401).json({ error: "unauthorized" });
   });
 
   app.use((req, res, next) => {

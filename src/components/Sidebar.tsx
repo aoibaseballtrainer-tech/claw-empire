@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { Department, Agent, CompanySettings } from "../types";
+import type { UserAuthInfo } from "../api/core";
 import { useI18n, localeName } from "../i18n";
 
-type View = "office" | "agents" | "dashboard" | "tasks" | "skills" | "settings";
+type View = "office" | "agents" | "dashboard" | "tasks" | "skills" | "threads" | "meo" | "gmail" | "website" | "daily-tasks" | "settings";
 
 interface SidebarProps {
   currentView: View;
@@ -11,6 +12,8 @@ interface SidebarProps {
   agents: Agent[];
   settings: CompanySettings;
   connected: boolean;
+  userAuth?: UserAuthInfo | null;
+  onLogout?: () => void;
 }
 
 const NAV_ITEMS: { view: View; icon: string; sprite?: string }[] = [
@@ -19,10 +22,15 @@ const NAV_ITEMS: { view: View; icon: string; sprite?: string }[] = [
   { view: "skills", icon: "📚" },
   { view: "dashboard", icon: "📊" },
   { view: "tasks", icon: "📋" },
+  { view: "threads", icon: "🧵" },
+  { view: "meo", icon: "📍" },
+  { view: "gmail", icon: "📧" },
+  { view: "website", icon: "🌐" },
+  { view: "daily-tasks", icon: "🔄" },
   { view: "settings", icon: "⚙️" },
 ];
 
-export default function Sidebar({ currentView, onChangeView, departments, agents, settings, connected }: SidebarProps) {
+export default function Sidebar({ currentView, onChangeView, departments, agents, settings, connected, userAuth, onLogout }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { t, locale } = useI18n();
   const workingCount = agents.filter((a) => a.status === "working").length;
@@ -36,6 +44,11 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
     skills: tr("문서고", "Library", "ライブラリ", "文档库"),
     dashboard: tr("대시보드", "Dashboard", "ダッシュボード", "仪表盘"),
     tasks: tr("업무 관리", "Tasks", "タスク管理", "任务管理"),
+    threads: "Threads",
+    meo: "MEO",
+    gmail: "Gmail",
+    website: tr("웹사이트", "Website", "ウェブサイト", "网站"),
+    "daily-tasks": tr("일일 작업", "Daily Tasks", "デイリータスク", "每日任务"),
     settings: tr("설정", "Settings", "設定", "设置"),
   };
 
@@ -77,7 +90,11 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
 
       {/* Navigation */}
       <nav className="flex-1 py-2 space-y-0.5 px-2">
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.filter((item) => {
+          // Hide settings for non-admin users
+          if (item.view === "settings" && userAuth?.role !== "admin") return false;
+          return true;
+        }).map((item) => (
           <button
             key={item.view}
             onClick={() => onChangeView(item.view)}
@@ -128,6 +145,81 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Staff name */}
+      {!collapsed && (() => {
+        const staffName = typeof window !== "undefined" ? window.localStorage.getItem("claw_staff_name") : null;
+        if (!staffName) return null;
+        return (
+          <div className="px-3 py-2" style={{ borderTop: "1px solid var(--th-border)" }}>
+            <button
+              onClick={() => {
+                const next = window.prompt(
+                  tr("이름을 변경하세요", "Change your name", "名前を変更してください", "请更改您的名字"),
+                  staffName,
+                );
+                if (next?.trim()) {
+                  window.localStorage.setItem("claw_staff_name", next.trim());
+                  window.location.reload();
+                }
+              }}
+              className="flex items-center gap-1.5 w-full rounded-md px-1.5 py-1 text-xs hover:bg-[var(--th-bg-surface-hover)] transition-colors"
+              style={{ color: "var(--th-text-secondary)" }}
+            >
+              <span>👤</span>
+              <span className="flex-1 truncate text-left">{staffName}</span>
+              <span className="text-[10px] opacity-50">✏️</span>
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* User info + Logout */}
+      {userAuth && (
+        <div className="px-3 py-2" style={{ borderTop: "1px solid var(--th-border)" }}>
+          {!collapsed ? (
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium truncate" style={{ color: "var(--th-text-secondary)" }}>
+                  {userAuth.name}
+                </div>
+                <div className="text-[10px] truncate" style={{ color: "var(--th-text-muted)" }}>
+                  {userAuth.role === "admin" ? "Admin" : "Operator"}
+                </div>
+              </div>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="shrink-0 p-1 rounded-md hover:bg-[var(--th-bg-surface-hover)] transition-colors"
+                  style={{ color: "var(--th-text-muted)" }}
+                  title={tr("로그아웃", "Logout", "ログアウト", "退出登录")}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ) : (
+            onLogout && (
+              <button
+                onClick={onLogout}
+                className="w-full flex justify-center p-1 rounded-md hover:bg-[var(--th-bg-surface-hover)] transition-colors"
+                style={{ color: "var(--th-text-muted)" }}
+                title={tr("로그아웃", "Logout", "ログアウト", "退出登录")}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
+            )
+          )}
         </div>
       )}
 

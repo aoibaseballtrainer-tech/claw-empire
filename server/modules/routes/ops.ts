@@ -14,6 +14,14 @@ import { registerOAuthRoutes } from "./ops/oauth/routes.ts";
 import { registerSkillRoutes } from "./ops/skills/routes.ts";
 import { registerApiDocsRoutes } from "./ops/api-docs.ts";
 import { registerWorkflowPackRoutes } from "./ops/workflow-packs.ts";
+import { registerThreadsRoutes } from "./ops/threads.ts";
+import { registerMeoRoutes } from "./ops/meo.ts";
+import { registerStaffChatRoutes } from "./ops/messages/staff-chat-routes.ts";
+import { registerAiAskRoutes } from "./ops/ai-ask.ts";
+import { registerUserAuthRoutes } from "./ops/user-auth.ts";
+import { registerCmsRoutes } from "./ops/cms.ts";
+import { registerBlogAutoGenRoutes } from "./ops/blog-autogen.ts";
+import { registerDailyTaskRoutes } from "./ops/daily-tasks.ts";
 
 export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   const __ctx: RuntimeContext = ctx;
@@ -233,6 +241,18 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   });
 
   registerTaskReportRoutes(__ctx);
+
+  // ---------------------------------------------------------------------------
+  // Threads & MEO integrations
+  // ---------------------------------------------------------------------------
+  registerThreadsRoutes({ app, db, nowMs });
+  registerMeoRoutes({ app, db, nowMs });
+  registerStaffChatRoutes({ app, db: db as any, nowMs, broadcast });
+  registerAiAskRoutes({ app, db, nowMs });
+  registerUserAuthRoutes({ app, db });
+  registerCmsRoutes({ app, db });
+  registerBlogAutoGenRoutes(app, db);
+  registerDailyTaskRoutes(app, db);
 
   return {
     prettyStreamJson,

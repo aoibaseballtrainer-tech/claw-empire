@@ -333,3 +333,73 @@ export function put<T = unknown>(url: string, body: unknown): Promise<T> {
 export function del<T = unknown>(url: string): Promise<T> {
   return request<T>(url, { method: "DELETE" });
 }
+
+// ---------------------------------------------------------------------------
+// User Auth helpers (email + password login)
+// ---------------------------------------------------------------------------
+export interface UserAuthInfo {
+  email: string;
+  name: string;
+  role: "admin" | "operator";
+}
+
+export interface LoginResult {
+  ok: boolean;
+  csrf_token?: string;
+  user?: UserAuthInfo;
+  error?: string;
+  message?: string;
+}
+
+export async function loginUser(email: string, password: string): Promise<LoginResult> {
+  const r = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+    credentials: "same-origin",
+  });
+  const body = await r.json().catch(() => ({ ok: false, error: "parse_error" }));
+  if (r.ok && body.ok) {
+    // Store CSRF token from user session
+    if (body.csrf_token) {
+      writeStoredCsrfToken(body.csrf_token);
+    }
+  }
+  return body as LoginResult;
+}
+
+export async function logoutUser(): Promise<void> {
+  try {
+    const headers = withAuthHeaders({ "content-type": "application/json" }, "POST");
+    await fetch(`${base}/api/auth/logout`, {
+      method: "POST",
+      headers,
+      credentials: "same-origin",
+    });
+  } catch {
+    // ignore logout errors
+  }
+  writeStoredApiAuthToken("");
+  writeStoredCsrfToken("");
+}
+
+export async function getCurrentUser(): Promise<UserAuthInfo | null> {
+  try {
+    const r = await fetch(`${base}/api/auth/me`, {
+      method: "GET",
+      credentials: "same-origin",
+    });
+    if (!r.ok) return null;
+    const body = await r.json();
+    if (body.ok && body.user) {
+      // Store CSRF token from user session
+      if (body.csrf_token) {
+        writeStoredCsrfToken(body.csrf_token);
+      }
+      return body.user as UserAuthInfo;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

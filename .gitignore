@@ -66,3 +66,5 @@ Thumbs.db
 
 # Playwright artifacts
 test-results/
+meo_contact_list.csv
+meo_leads_export.csv

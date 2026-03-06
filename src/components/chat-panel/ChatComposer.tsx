@@ -2,7 +2,7 @@ import type { KeyboardEvent, RefObject } from "react";
 import type { Agent } from "../../types";
 import ChatModeHint from "./ChatModeHint";
 
-type ChatMode = "chat" | "task" | "announcement" | "report";
+type ChatMode = "chat" | "task" | "announcement" | "report" | "staff_chat";
 type Tr = (ko: string, en: string, ja?: string, zh?: string) => string;
 
 interface ChatComposerProps {
@@ -72,6 +72,18 @@ export default function ChatComposer({
           <span>📊</span>
           <span>{tr("보고 요청", "Report", "レポート依頼", "报告请求")}</span>
         </button>
+
+        <button
+          onClick={() => onModeChange(mode === "staff_chat" ? "chat" : "staff_chat")}
+          className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
+            mode === "staff_chat"
+              ? "bg-purple-600 text-white"
+              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+          }`}
+        >
+          <span>👥</span>
+          <span>{tr("팀 채팅", "Team Chat", "チームチャット", "团队聊天")}</span>
+        </button>
       </div>
 
       <ChatModeHint mode={mode} isDirectiveMode={isDirectiveMode} tr={tr} />
@@ -83,11 +95,13 @@ export default function ChatComposer({
               ? "border-red-500/50 focus-within:border-red-400"
               : isAnnouncementMode
                 ? "border-yellow-500/50 focus-within:border-yellow-400"
-                : mode === "task"
-                  ? "border-blue-500/50 focus-within:border-blue-400"
-                  : mode === "report"
-                    ? "border-emerald-500/50 focus-within:border-emerald-400"
-                    : "border-gray-600 focus-within:border-blue-500"
+                : mode === "staff_chat"
+                  ? "border-purple-500/50 focus-within:border-purple-400"
+                  : mode === "task"
+                    ? "border-blue-500/50 focus-within:border-blue-400"
+                    : mode === "report"
+                      ? "border-emerald-500/50 focus-within:border-emerald-400"
+                      : "border-gray-600 focus-within:border-blue-500"
           }`}
         >
           <textarea
@@ -103,21 +117,28 @@ export default function ChatComposer({
                     "全体告知内容を入力してください...",
                     "请输入公告内容...",
                   )
-                : mode === "task"
+                : mode === "staff_chat"
                   ? tr(
-                      "업무 지시 내용을 입력하세요...",
-                      "Write a task instruction...",
-                      "タスク指示内容を入力してください...",
-                      "请输入任务指示内容...",
+                      "팀 메시지를 입력하세요...",
+                      "Type a team message...",
+                      "チームメッセージを入力してください...",
+                      "请输入团队消息...",
                     )
-                  : mode === "report"
+                  : mode === "task"
                     ? tr(
-                        "보고 요청 내용을 입력하세요...",
-                        "Write a report request...",
-                        "レポート依頼内容を入力してください...",
-                        "请输入报告请求内容...",
+                        "업무 지시 내용을 입력하세요...",
+                        "Write a task instruction...",
+                        "タスク指示内容を入力してください...",
+                        "请输入任务指示内容...",
                       )
-                    : selectedAgent
+                    : mode === "report"
+                      ? tr(
+                          "보고 요청 내용을 입력하세요...",
+                          "Write a report request...",
+                          "レポート依頼内容を入力してください...",
+                          "请输入报告请求内容...",
+                        )
+                      : selectedAgent
                       ? tr(
                           `${getAgentName(selectedAgent)}에게 메시지 보내기...`,
                           `Send a message to ${getAgentName(selectedAgent)}...`,
@@ -149,11 +170,13 @@ export default function ChatComposer({
                   ? "bg-red-600 text-white hover:bg-red-500"
                   : isAnnouncementMode
                     ? "bg-yellow-500 text-gray-900 hover:bg-yellow-400"
-                    : mode === "task"
-                      ? "bg-blue-600 text-white hover:bg-blue-500"
-                      : mode === "report"
-                        ? "bg-emerald-600 text-white hover:bg-emerald-500"
-                        : "bg-blue-600 text-white hover:bg-blue-500"
+                    : mode === "staff_chat"
+                      ? "bg-purple-600 text-white hover:bg-purple-500"
+                      : mode === "task"
+                        ? "bg-blue-600 text-white hover:bg-blue-500"
+                        : mode === "report"
+                          ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                          : "bg-blue-600 text-white hover:bg-blue-500"
                 : "cursor-not-allowed bg-gray-700 text-gray-600"
             }`}
             aria-label={tr("전송", "Send", "送信", "发送")}

@@ -104,6 +104,7 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
 
     const senderType = typeof body.sender_type === "string" ? body.sender_type : "ceo";
     const senderId = typeof body.sender_id === "string" ? body.sender_id : null;
+    const senderName = typeof body.sender_name === "string" ? body.sender_name.trim() || null : null;
     const receiverType = typeof body.receiver_type === "string" ? body.receiver_type : "all";
     const receiverId = typeof body.receiver_id === "string" ? body.receiver_id : null;
     const messageType = typeof body.message_type === "string" ? body.message_type : "chat";
@@ -118,6 +119,7 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
       ({ message: storedMessage, created } = await insertMessageWithIdempotency({
         senderType,
         senderId,
+        senderName,
         receiverType,
         receiverId,
         content,
@@ -198,8 +200,8 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
       return;
     broadcast("new_message", msg);
 
-    // Schedule agent auto-reply when CEO messages an agent
-    if (senderType === "ceo" && receiverType === "agent" && receiverId) {
+    // Schedule agent auto-reply when CEO or staff messages an agent
+    if ((senderType === "ceo" || senderType === "staff") && receiverType === "agent" && receiverId) {
       if (messageType === "report") {
         const handled = handleReportRequest(receiverId, content);
         if (!handled) {

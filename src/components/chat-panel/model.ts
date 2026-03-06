@@ -8,7 +8,7 @@ export interface StreamingMessage {
   content: string;
 }
 
-export type ChatMode = "chat" | "task" | "announcement" | "report";
+export type ChatMode = "chat" | "task" | "announcement" | "report" | "staff_chat";
 
 export type ProjectMetaPayload = {
   project_id?: string;
@@ -22,7 +22,8 @@ export type PendingSendAction =
   | { kind: "task"; content: string; receiverId: string }
   | { kind: "report"; content: string; receiverId: string }
   | { kind: "chat"; content: string; receiverId: string }
-  | { kind: "broadcast"; content: string };
+  | { kind: "broadcast"; content: string }
+  | { kind: "staff_chat"; content: string };
 
 export const STATUS_COLORS: Record<string, string> = {
   idle: "bg-green-400",

@@ -35,7 +35,10 @@ interface AppHeaderBarProps {
   onOpenAgentStatus: () => void;
   onOpenReportHistory: () => void;
   onOpenAnnouncement: () => void;
+  onOpenStaffChat: () => void;
+  chatLabel: string;
   onOpenRoomManager: () => void;
+  onOpenAiAsk: () => void;
   onToggleTheme: () => void;
   onToggleMobileHeaderMenu: () => void;
   onCloseMobileHeaderMenu: () => void;
@@ -62,7 +65,10 @@ export default function AppHeaderBar({
   onOpenAgentStatus,
   onOpenReportHistory,
   onOpenAnnouncement,
+  onOpenStaffChat,
+  chatLabel,
   onOpenRoomManager,
+  onOpenAiAsk,
   onToggleTheme,
   onToggleMobileHeaderMenu,
   onCloseMobileHeaderMenu,
@@ -162,6 +168,14 @@ export default function AppHeaderBar({
         <button onClick={onOpenAnnouncement} className="header-action-btn header-action-btn-secondary">
           <span className="sm:hidden">📢</span>
           <span className="hidden sm:inline">{announcementLabel}</span>
+        </button>
+        <button onClick={onOpenAiAsk} className="header-action-btn header-action-btn-secondary">
+          <span className="sm:hidden">🤖</span>
+          <span className="hidden sm:inline">🤖 AI</span>
+        </button>
+        <button onClick={onOpenStaffChat} className="header-action-btn header-action-btn-secondary">
+          <span className="sm:hidden">💬</span>
+          <span className="hidden sm:inline">💬 {chatLabel}</span>
         </button>
         <button onClick={onOpenRoomManager} className="header-action-btn header-action-btn-secondary mobile-hidden">
           {roomManagerLabel}

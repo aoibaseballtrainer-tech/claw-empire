@@ -10,6 +10,7 @@ import OfficeRoomManager from "../components/OfficeRoomManager";
 import type { DecisionInboxItem } from "../components/chat/decision-inbox";
 import type { Agent, Department, Message, RoomTheme, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
 import type { UiLanguage } from "../i18n";
+import AiAskPanel from "../components/AiAskPanel";
 import type { ProjectMetaPayload, RoomThemeMap, TaskPanelTab } from "./types";
 
 interface AppOverlaysProps {
@@ -73,6 +74,8 @@ interface AppOverlaysProps {
   onActiveRoomThemeTargetIdChange: (departmentId: string | null) => void;
   onRoomThemeChange: (themes: Record<string, RoomTheme>) => void;
   onCloseRoomManager: () => void;
+  showAiAsk: boolean;
+  onCloseAiAsk: () => void;
 }
 
 export default function AppOverlays({
@@ -120,6 +123,8 @@ export default function AppOverlays({
   onActiveRoomThemeTargetIdChange,
   onRoomThemeChange,
   onCloseRoomManager,
+  showAiAsk,
+  onCloseAiAsk,
 }: AppOverlaysProps) {
   return (
     <>
@@ -216,6 +221,8 @@ export default function AppOverlays({
           language={uiLanguage}
         />
       )}
+
+      {showAiAsk && <AiAskPanel onClose={onCloseAiAsk} />}
     </>
   );
 }

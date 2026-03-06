@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type { Agent, Message, Project } from "../types";
 import { buildSpriteMap } from "./AgentAvatar";
 import { useI18n } from "../i18n";
-import { createProject, getProjects } from "../api";
+import { createProject, getProjects, getStaffMessages, sendStaffMessage } from "../api";
 import { parseDecisionRequest } from "./chat/decision-request";
 import type { DecisionOption } from "./chat/decision-request";
 import ChatComposer from "./chat-panel/ChatComposer";
@@ -61,7 +61,7 @@ export function ChatPanel({
   onClose,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<ChatMode>(selectedAgent ? "task" : "announcement");
+  const [mode, setMode] = useState<ChatMode>(selectedAgent ? "task" : "staff_chat");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const spriteMap = useMemo(() => buildSpriteMap(agents), [agents]);
@@ -112,11 +112,39 @@ export function ChatPanel({
   // Switch mode when agent selection changes
   useEffect(() => {
     if (!selectedAgent) {
-      setMode("announcement");
+      if (mode !== "staff_chat") setMode("announcement");
     } else if (mode === "announcement") {
       setMode("task");
     }
   }, [selectedAgent]);
+
+  // Staff chat messages (separate from agent messages)
+  const [staffMessages, setStaffMessages] = useState<Message[]>([]);
+  const [staffChatLoaded, setStaffChatLoaded] = useState(false);
+
+  const loadStaffChat = useCallback(async () => {
+    try {
+      const msgs = await getStaffMessages(100);
+      setStaffMessages(msgs);
+      setStaffChatLoaded(true);
+    } catch (err) {
+      console.error("Failed to load staff messages:", err);
+    }
+  }, []);
+
+  // Load staff messages when switching to staff_chat mode
+  useEffect(() => {
+    if (mode === "staff_chat") {
+      void loadStaffChat();
+    }
+  }, [mode, loadStaffChat]);
+
+  // Poll staff messages while in staff_chat mode
+  useEffect(() => {
+    if (mode !== "staff_chat") return;
+    const timer = setInterval(() => void loadStaffChat(), 3000);
+    return () => clearInterval(timer);
+  }, [mode, loadStaffChat]);
 
   const isDirectiveMode = input.trimStart().startsWith("$");
   const [pendingSend, setPendingSend] = useState<PendingSendAction | null>(null);
@@ -254,6 +282,12 @@ export function ChatPanel({
         onSendAnnouncement(action.content);
         return;
       }
+      if (action.kind === "staff_chat") {
+        sendStaffMessage(action.content)
+          .then(() => loadStaffChat())
+          .catch((err) => console.error("Staff message failed:", err));
+        return;
+      }
       if (action.kind === "task") {
         onSendMessage(action.content, "agent", action.receiverId, "task_assign", projectMeta);
         return;
@@ -268,7 +302,7 @@ export function ChatPanel({
       }
       onSendMessage(action.content, "all", undefined, undefined, projectMeta);
     },
-    [onSendAnnouncement, onSendDirective, onSendMessage],
+    [onSendAnnouncement, onSendDirective, onSendMessage, loadStaffChat],
   );
 
   const handleConfirmProject = () => {
@@ -323,6 +357,8 @@ export function ChatPanel({
       const directiveContent = trimmed.slice(1).trim();
       if (!directiveContent) return;
       action = { kind: "directive", content: directiveContent };
+    } else if (mode === "staff_chat") {
+      action = { kind: "staff_chat", content: trimmed };
     } else if (mode === "announcement") {
       action = { kind: "announcement", content: trimmed };
     } else if (mode === "task" && selectedAgent) {
@@ -370,25 +406,30 @@ export function ChatPanel({
     Boolean(isDirectivePending ? (pendingSend?.content ?? "").trim() : newProjectGoal.trim());
 
   const isAnnouncementMode = mode === "announcement";
+  const isStaffChatMode = mode === "staff_chat";
 
   // Filter messages relevant to current view (memoized to avoid re-filtering on every render)
   const selectedAgentId = selectedAgent?.id;
   const visibleMessages = useMemo(
-    () =>
-      messages.filter((msg) => {
+    () => {
+      // In staff_chat mode, show staff-to-staff messages instead
+      if (isStaffChatMode) return staffMessages;
+
+      return messages.filter((msg) => {
         if (!selectedAgentId) {
           return msg.receiver_type === "all" || msg.message_type === "announcement" || msg.message_type === "directive";
         }
         if (selectedTaskId && msg.task_id === selectedTaskId) return true;
         return (
-          (msg.sender_type === "ceo" && msg.receiver_type === "agent" && msg.receiver_id === selectedAgentId) ||
+          ((msg.sender_type === "ceo" || msg.sender_type === "staff") && msg.receiver_type === "agent" && msg.receiver_id === selectedAgentId) ||
           (msg.sender_type === "agent" && msg.sender_id === selectedAgentId) ||
           msg.message_type === "announcement" ||
           msg.message_type === "directive" ||
           msg.receiver_type === "all"
         );
-      }),
-    [messages, selectedAgentId, selectedTaskId],
+      });
+    },
+    [messages, selectedAgentId, selectedTaskId, isStaffChatMode, staffMessages],
   );
 
   const decisionRequestByMessage = useMemo(() => {
@@ -422,7 +463,7 @@ export function ChatPanel({
         getRoleLabel={getRoleLabel}
         getStatusLabel={getStatusLabel}
         statusColors={STATUS_COLORS}
-        showAnnouncementBanner={isAnnouncementMode}
+        showAnnouncementBanner={isAnnouncementMode || isStaffChatMode}
         visibleMessagesLength={visibleMessages.length}
         onClearMessages={onClearMessages}
         onClose={onClose}

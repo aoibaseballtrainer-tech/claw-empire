@@ -5,7 +5,12 @@ import Dashboard from "../components/Dashboard";
 import TaskBoard from "../components/TaskBoard";
 import AgentManager from "../components/AgentManager";
 import SkillsLibrary from "../components/SkillsLibrary";
+import ThreadsManager from "../components/ThreadsManager";
+import MeoManager from "../components/MeoManager";
+import GmailInbox from "../components/GmailInbox";
 import SettingsPanel from "../components/SettingsPanel";
+import CmsManager from "../components/CmsManager";
+import DailyTasksManager from "../components/DailyTasksManager";
 import { I18nProvider } from "../i18n";
 import type {
   Agent,
@@ -22,6 +27,7 @@ import type {
   WorkflowPackKey,
 } from "../types";
 import type { UpdateStatus } from "../api";
+import type { UserAuthInfo } from "../api/core";
 import type { OAuthCallbackResult, RoomThemeMap, View } from "./types";
 import AppHeaderBar from "./AppHeaderBar";
 import {
@@ -127,10 +133,14 @@ interface AppMainLayoutProps {
   onOpenAgentStatus: () => void;
   onOpenReportHistory: () => void;
   onOpenAnnouncement: () => void;
+  onOpenStaffChat: () => void;
   onOpenRoomManager: () => void;
+  onOpenAiAsk: () => void;
   onDismissAutoUpdateNotice: () => Promise<void>;
   onDismissUpdate: () => void;
   officePackBootstrappingLabel?: string | null;
+  userAuth?: UserAuthInfo | null;
+  onLogout?: () => void;
   children?: ReactNode;
 }
 
@@ -188,10 +198,14 @@ export default function AppMainLayout({
   onOpenAgentStatus,
   onOpenReportHistory,
   onOpenAnnouncement,
+  onOpenStaffChat,
   onOpenRoomManager,
+  onOpenAiAsk,
   onDismissAutoUpdateNotice,
   onDismissUpdate,
   officePackBootstrappingLabel,
+  userAuth,
+  onLogout,
   children,
 }: AppMainLayoutProps) {
   const uiLanguage =
@@ -344,6 +358,8 @@ export default function AppMainLayout({
             agents={officePresentation.agents}
             settings={settings}
             connected={connected}
+            userAuth={userAuth}
+            onLogout={onLogout}
           />
         </div>
 
@@ -369,6 +385,8 @@ export default function AppMainLayout({
             agents={officePresentation.agents}
             settings={settings}
             connected={connected}
+            userAuth={userAuth}
+            onLogout={onLogout}
           />
         </div>
 
@@ -393,7 +411,10 @@ export default function AppMainLayout({
             onOpenAgentStatus={onOpenAgentStatus}
             onOpenReportHistory={onOpenReportHistory}
             onOpenAnnouncement={onOpenAnnouncement}
+            onOpenStaffChat={onOpenStaffChat}
+            chatLabel={uiLanguage === "ko" ? "チャット" : uiLanguage === "ja" ? "チャット" : uiLanguage === "zh" ? "聊天" : "Chat"}
             onOpenRoomManager={onOpenRoomManager}
+            onOpenAiAsk={onOpenAiAsk}
             officePackControl={
               view === "office" || view === "agents" || view === "tasks"
                 ? {
@@ -540,6 +561,16 @@ export default function AppMainLayout({
             )}
 
             {view === "skills" && <SkillsLibrary agents={agents} />}
+
+            {view === "threads" && <ThreadsManager />}
+
+            {view === "meo" && <MeoManager />}
+
+            {view === "gmail" && <GmailInbox />}
+
+            {view === "website" && <CmsManager />}
+
+            {view === "daily-tasks" && <DailyTasksManager />}
 
             {view === "settings" && (
               <SettingsPanel

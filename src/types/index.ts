@@ -186,9 +186,9 @@ export interface MeetingMinute {
 }
 
 // Messages
-export type SenderType = "ceo" | "agent" | "system";
-export type ReceiverType = "agent" | "department" | "all";
-export type MessageType = "chat" | "task_assign" | "announcement" | "directive" | "report" | "status_update";
+export type SenderType = "ceo" | "staff" | "agent" | "system";
+export type ReceiverType = "agent" | "department" | "all" | "staff";
+export type MessageType = "chat" | "task_assign" | "announcement" | "directive" | "report" | "status_update" | "staff_chat";
 
 export interface Message {
   id: string;
@@ -285,6 +285,7 @@ export type WSEventType =
   | "ceo_office_call"
   | "chat_stream"
   | "task_report"
+  | "new_staff_message"
   | "connected";
 
 export interface WSEvent {

@@ -132,12 +132,13 @@ CREATE TABLE IF NOT EXISTS task_creation_audits (
 
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
-  sender_type TEXT NOT NULL CHECK(sender_type IN ('ceo','agent','system')),
+  sender_type TEXT NOT NULL CHECK(sender_type IN ('ceo','staff','agent','system')),
   sender_id TEXT,
-  receiver_type TEXT NOT NULL CHECK(receiver_type IN ('agent','department','all')),
+  sender_name TEXT,
+  receiver_type TEXT NOT NULL CHECK(receiver_type IN ('agent','department','all','staff')),
   receiver_id TEXT,
   content TEXT NOT NULL,
-  message_type TEXT DEFAULT 'chat' CHECK(message_type IN ('chat','task_assign','announcement','directive','report','status_update')),
+  message_type TEXT DEFAULT 'chat' CHECK(message_type IN ('chat','task_assign','announcement','directive','report','status_update','staff_chat')),
   task_id TEXT REFERENCES tasks(id),
   idempotency_key TEXT,
   created_at INTEGER DEFAULT (unixepoch()*1000)

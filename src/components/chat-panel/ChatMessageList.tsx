@@ -212,6 +212,34 @@ export default function ChatMessageList({
               );
             }
 
+            if (msg.sender_type === "staff") {
+              const staffDisplayName = senderNameFromPayload || tr("스태프", "Staff", "スタッフ", "员工");
+              const isMyMessage = typeof window !== "undefined" && staffDisplayName === window.localStorage.getItem("claw_staff_name");
+              if (isMyMessage) {
+                return (
+                  <div key={msg.id} className="flex flex-col items-end gap-1">
+                    <span className="px-1 text-xs text-gray-500">{staffDisplayName}</span>
+                    <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-purple-600 px-4 py-2.5 text-sm text-white shadow-md">
+                      <MessageContent content={msg.content} />
+                    </div>
+                    <span className="px-1 text-xs text-gray-600">{formatTime(msg.created_at, locale)}</span>
+                  </div>
+                );
+              }
+              return (
+                <div key={msg.id} className="flex items-end gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-700 text-xs">👤</div>
+                  <div className="flex max-w-[75%] flex-col gap-1">
+                    <span className="px-1 text-xs text-gray-500">{staffDisplayName}</span>
+                    <div className="rounded-2xl rounded-bl-sm bg-purple-800/60 px-4 py-2.5 text-sm text-gray-100 shadow-md">
+                      <MessageContent content={msg.content} />
+                    </div>
+                    <span className="px-1 text-xs text-gray-600">{formatTime(msg.created_at, locale)}</span>
+                  </div>
+                </div>
+              );
+            }
+
             if (isCeo) {
               return (
                 <div key={msg.id} className="flex flex-col items-end gap-1">

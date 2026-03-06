@@ -130,6 +130,7 @@ export function applyTaskSchemaMigrations(db: DbLike): void {
   ensureOfficePackScopedDepartmentSchema(db);
 
   migrateMessagesDirectiveType(db);
+  migrateMessagesStaffSupport(db);
   migrateLegacyTasksStatusSchema(db);
   repairLegacyTaskForeignKeys(db);
   ensureMessagesIdempotencySchema(db);
@@ -361,6 +362,70 @@ function migrateMessagesDirectiveType(db: DbLike): void {
   }
   // Recreate index
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_type, receiver_id, created_at DESC)");
+}
+
+function migrateMessagesStaffSupport(db: DbLike): void {
+  const row = db
+    .prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'`,
+    )
+    .get() as { sql?: string } | undefined;
+  const ddl = (row?.sql ?? "").toLowerCase();
+  if (ddl.includes("'staff'")) return;
+
+  console.log("[Claw-Empire] Migrating messages table to support staff sender/receiver types");
+  const oldTable = "messages_staff_migration_old";
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    db.exec("BEGIN");
+    try {
+      db.exec(`ALTER TABLE messages RENAME TO ${oldTable}`);
+      const oldCols = db.prepare(`PRAGMA table_info(${oldTable})`).all() as Array<{ name: string }>;
+      const hasIdempotencyKey = oldCols.some((c) => c.name === "idempotency_key");
+      const hasProjectId = oldCols.some((c) => c.name === "project_id");
+      const idempotencyExpr = hasIdempotencyKey ? "idempotency_key" : "NULL";
+      const projectIdExpr = hasProjectId ? "project_id" : "NULL";
+      const projectPathExpr = hasProjectId ? "project_path" : "NULL";
+      const projectCtxExpr = hasProjectId ? "project_context" : "NULL";
+      db.exec(`
+        CREATE TABLE messages (
+          id TEXT PRIMARY KEY,
+          sender_type TEXT NOT NULL CHECK(sender_type IN ('ceo','staff','agent','system')),
+          sender_id TEXT,
+          sender_name TEXT,
+          receiver_type TEXT NOT NULL CHECK(receiver_type IN ('agent','department','all','staff')),
+          receiver_id TEXT,
+          content TEXT NOT NULL,
+          message_type TEXT DEFAULT 'chat' CHECK(message_type IN ('chat','task_assign','announcement','directive','report','status_update','staff_chat')),
+          task_id TEXT REFERENCES tasks(id),
+          idempotency_key TEXT,
+          project_id TEXT,
+          project_path TEXT,
+          project_context TEXT,
+          created_at INTEGER DEFAULT (unixepoch()*1000)
+        );
+      `);
+      db.exec(`
+        INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, idempotency_key, project_id, project_path, project_context, created_at)
+        SELECT id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, ${idempotencyExpr}, ${projectIdExpr}, ${projectPathExpr}, ${projectCtxExpr}, created_at
+        FROM ${oldTable};
+      `);
+      db.exec(`DROP TABLE ${oldTable}`);
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      try {
+        db.exec(`ALTER TABLE ${oldTable} RENAME TO messages`);
+      } catch {
+        /* */
+      }
+      throw e;
+    }
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_type, receiver_id, created_at DESC)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_staff ON messages(message_type, created_at DESC)");
 }
 
 function migrateLegacyTasksStatusSchema(db: DbLike): void {
