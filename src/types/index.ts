@@ -286,7 +286,16 @@ export type WSEventType =
   | "chat_stream"
   | "task_report"
   | "new_staff_message"
-  | "connected";
+  | "connected"
+  | "voice_call_incoming"
+  | "voice_call_accepted"
+  | "voice_call_rejected"
+  | "voice_call_ended"
+  | "voice_call_unavailable"
+  | "voice_offer"
+  | "voice_answer"
+  | "voice_ice_candidate"
+  | "voice_online_users";
 
 export interface WSEvent {
   type: WSEventType;

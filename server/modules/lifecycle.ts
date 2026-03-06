@@ -11,6 +11,7 @@ import { registerGracefulShutdownHandlers } from "./lifecycle/register-graceful-
 import { registerPublicSiteRoutes, isPublicSiteHost } from "./routes/public-site.ts";
 import { startBlogAutoGenScheduler } from "./routes/ops/blog-autogen.ts";
 import { startDailyTasksScheduler } from "./routes/ops/daily-tasks.ts";
+import { extractUserFromRequest, registerUserWs, unregisterUserWs, handleVoiceMessage } from "./voice-call.ts";
 
 export function startLifecycle(ctx: RuntimeContext): void {
   const {
@@ -473,6 +474,12 @@ export function startLifecycle(ctx: RuntimeContext): void {
     wsClients.add(ws);
     console.log(`[Claw-Empire] WebSocket client connected (total: ${wsClients.size})`);
 
+    // Extract user identity for voice call routing
+    const wsUser = extractUserFromRequest(req);
+    if (wsUser) {
+      registerUserWs(wsUser.email, ws);
+    }
+
     // Send initial state to the newly connected client
     ws.send(
       JSON.stringify({
@@ -485,13 +492,26 @@ export function startLifecycle(ctx: RuntimeContext): void {
       }),
     );
 
+    // Handle incoming messages (voice call signaling)
+    ws.on("message", (data: Buffer | string) => {
+      if (!wsUser) return;
+      try {
+        const msg = JSON.parse(typeof data === "string" ? data : data.toString("utf8"));
+        if (typeof msg.type === "string" && msg.type.startsWith("voice_")) {
+          handleVoiceMessage(wsUser.email, wsUser.name, msg);
+        }
+      } catch { /* ignore malformed messages */ }
+    });
+
     ws.on("close", () => {
       wsClients.delete(ws);
+      if (wsUser) unregisterUserWs(wsUser.email, ws);
       console.log(`[Claw-Empire] WebSocket client disconnected (total: ${wsClients.size})`);
     });
 
     ws.on("error", () => {
       wsClients.delete(ws);
+      if (wsUser) unregisterUserWs(wsUser.email, ws);
     });
   });
 

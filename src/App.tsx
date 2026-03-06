@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import StaffNameModal from "./components/StaffNameModal";
 import LoginPage from "./components/LoginPage";
+import VoiceCall from "./components/VoiceCall";
 import type { DecisionInboxItem } from "./components/chat/decision-inbox";
 import { useWebSocket } from "./hooks/useWebSocket";
 import type {
@@ -344,7 +345,7 @@ function AppMain({
       });
   };
 
-  const { connected, on } = useWebSocket();
+  const { connected, on, send: wsSend } = useWebSocket();
   const shouldIncludeSeedAgents = useCallback(
     () => normalizeOfficeWorkflowPack(settings.officeWorkflowPack ?? "development") !== "development",
     [settings.officeWorkflowPack],
@@ -653,6 +654,7 @@ function AppMain({
         showAiAsk={showAiAsk}
         onCloseAiAsk={() => setShowAiAsk(false)}
       />
+      <VoiceCall myEmail={userAuth.email} wsSend={wsSend} wsOn={on} />
     </AppMainLayout>
   );
 }
