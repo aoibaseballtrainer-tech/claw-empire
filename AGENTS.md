@@ -28,6 +28,43 @@ Set the following as a default skill in your working environment:
 Rules:
 1. For non-trivial implementation tasks, load and follow `tools/taste-skill/skill.md` first when the file exists.
 2. If the local file is missing, continue with existing project rules without auto-fetching remote repositories.
+
+---
+
+## PM Skills Library (Product Manager Frameworks)
+
+`PM_SKILLS_V1`
+
+**Location:** `/Users/opentime.wealthy/.openclaw/workspace/Product-Manager-Skills/skills/`
+
+46 battle-tested product management skills are available. Each skill has a `SKILL.md` with structured frameworks.
+
+### When to use PM Skills
+- **Prioritization decisions** → read `prioritization-advisor/SKILL.md`
+- **PRD writing** → read `prd-development/SKILL.md`
+- **User story creation** → read `user-story/SKILL.md`
+- **Problem framing** → read `problem-framing-canvas/SKILL.md`
+- **Market sizing (TAM/SAM/SOM)** → read `tam-sam-som-calculator/SKILL.md`
+- **Roadmap planning** → read `roadmap-planning/SKILL.md`
+- **Company/competitor research** → read `company-research/SKILL.md`
+- **Jobs-to-be-done analysis** → read `jobs-to-be-done/SKILL.md`
+- **Press release (Amazon style)** → read `press-release/SKILL.md`
+- **Customer journey mapping** → read `customer-journey-map/SKILL.md`
+- **Positioning statement** → read `positioning-statement/SKILL.md`
+- **Opportunity-solution tree** → read `opportunity-solution-tree/SKILL.md`
+- **Epic breakdown** → read `epic-breakdown-advisor/SKILL.md`
+- **Lean UX canvas** → read `lean-ux-canvas/SKILL.md`
+- **Discovery interview prep** → read `discovery-interview-prep/SKILL.md`
+- **SaaS metrics** → read `saas-revenue-growth-metrics/SKILL.md` or `saas-economics-efficiency-metrics/SKILL.md`
+- **Pricing strategy** → read `finance-based-pricing-advisor/SKILL.md`
+- **PESTEL analysis** → read `pestel-analysis/SKILL.md`
+- **Storyboarding** → read `storyboard/SKILL.md`
+
+### Rules
+1. When a task involves product strategy, prioritization, or planning, check if a relevant PM Skill exists.
+2. Read the SKILL.md first, then follow its framework step-by-step.
+3. One skill per task — don't mix frameworks unless the skill explicitly chains to another.
+4. Output should follow the skill's prescribed format/sections.
 3. Do not remove existing project-specific skills/rules; this is an additive default.
 
 ---
