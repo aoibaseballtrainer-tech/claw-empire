@@ -194,7 +194,9 @@ export function startLifecycle(ctx: RuntimeContext): void {
     }>;
 
     for (const row of workingAgents) {
-      const normalizedTaskStatus = String(row.task_status ?? "").trim().toLowerCase();
+      const normalizedTaskStatus = String(row.task_status ?? "")
+        .trim()
+        .toLowerCase();
       if (row.task_id && normalizedTaskStatus === "in_progress") continue;
 
       const staleReason = row.task_id ? `task_status_${normalizedTaskStatus || "unknown"}` : "task_missing";
